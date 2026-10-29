@@ -127,6 +127,7 @@ function toLetter(row: Row): Letter {
     createdAt: String(row.created_real),
     createdSimTime: Number(row.created_sim),
     hasDoodle: row.doodle !== null && row.doodle !== undefined,
+    ...(row.question ? { question: String(row.question) } : {}),
     ...(row.doodle_caption ? { doodleCaption: String(row.doodle_caption) } : {}),
     ...(replied ? { reply: String(row.reply), repliedSimTime: Number(row.replied_sim) } : {}),
   };
@@ -187,6 +188,9 @@ export class Store {
     // data:image/png;base64,… and Ampli's description of it.
     this.addColumn('letters', 'doodle', 'TEXT');
     this.addColumn('letters', 'doodle_caption', 'TEXT');
+    // Answers to Ampli's questions: the question's event id and its text (kept even if the event goes).
+    this.addColumn('letters', 'in_reply_to', 'INTEGER');
+    this.addColumn('letters', 'question', 'TEXT');
   }
 
   appendEvent(simTime: number, body: EventBody): WorldEvent {
@@ -487,11 +491,13 @@ export class Store {
     simTime: number;
     ipHash?: string;
     doodle?: string;
+    inReplyTo?: { id: number; question: string };
   }): Letter {
     const res = this.db
       .prepare(
-        `INSERT INTO letters (visitor_id, name, text, visibility, status, created_real, created_sim, ip_hash, doodle)
-         VALUES (?, ?, ?, ?, 'checking', ?, ?, ?, ?)`,
+        `INSERT INTO letters (visitor_id, name, text, visibility, status, created_real, created_sim, ip_hash, doodle,
+           in_reply_to, question)
+         VALUES (?, ?, ?, ?, 'checking', ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         l.visitorId,
@@ -502,6 +508,8 @@ export class Store {
         l.simTime,
         l.ipHash ?? null,
         l.doodle ?? null,
+        l.inReplyTo?.id ?? null,
+        l.inReplyTo?.question ?? null,
       );
     return this.letter(Number(res.lastInsertRowid))!;
   }
@@ -638,11 +646,43 @@ export class Store {
 
   /** What the brain and map see. A paused mailbox looks empty, so Ampli doesn't go to the post box. */
   mailStats(): MailStats {
-    if (this.isMailboxPaused()) return { waiting: 0, oldestSimTime: null };
+    if (this.isMailboxPaused()) return { waiting: 0, oldestSimTime: null, answers: 0, oldestAnswerSimTime: null };
     const row = this.db
-      .prepare("SELECT COUNT(*) AS n, MIN(created_sim) AS oldest FROM letters WHERE status = 'waiting'")
+      .prepare(
+        `SELECT COUNT(*) AS n, MIN(created_sim) AS oldest,
+           SUM(in_reply_to IS NOT NULL) AS answers, MIN(CASE WHEN in_reply_to IS NOT NULL THEN created_sim END) AS oldest_answer
+         FROM letters WHERE status = 'waiting'`,
+      )
       .get() as Row;
-    return { waiting: Number(row.n), oldestSimTime: row.oldest === null ? null : Number(row.oldest) };
+    return {
+      waiting: Number(row.n),
+      oldestSimTime: row.oldest === null ? null : Number(row.oldest),
+      answers: Number(row.answers ?? 0),
+      oldestAnswerSimTime: row.oldest_answer === null ? null : Number(row.oldest_answer),
+    };
+  }
+
+  /** A pinned question (not held), if it is one. */
+  question(eventId: number): { id: number; text: string; simTime: number } | null {
+    const row = this.db.prepare("SELECT * FROM events WHERE id = ? AND type = 'note_posted'").get(eventId) as
+      | Row
+      | undefined;
+    if (!row) return null;
+    const data = JSON.parse(String(row.data)) as { text?: string; question?: boolean; held?: boolean };
+    return data.question && data.text && !data.held ? { id: eventId, text: data.text, simTime: Number(row.sim_time) } : null;
+  }
+
+  /** Ampli's newest question, as long as no letter answers it yet. */
+  openQuestion(): { id: number; text: string; simTime: number } | null {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM events WHERE type = 'note_posted' AND json_extract(data, '$.question') = 1
+         AND json_extract(data, '$.held') IS NULL ORDER BY id DESC LIMIT 1`,
+      )
+      .get() as Row | undefined;
+    if (!row) return null;
+    const answered = this.db.prepare('SELECT 1 FROM letters WHERE in_reply_to = ? LIMIT 1').get(Number(row.id));
+    return answered ? null : this.question(Number(row.id));
   }
 
   /** Moves a letter from `from` to `to`. Returns false if it wasn't in `from` (already handled). */

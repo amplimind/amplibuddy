@@ -102,6 +102,7 @@ export function StatusCard({ snapshot, events }: { snapshot: WorldSnapshot; even
       <p className="mood">
         Mood: <strong>{agent.mood.label}</strong>
       </p>
+
       <NeedBar label="Energy" value={agent.needs.energy} color="var(--energy)" />
       <NeedBar label="Fed" value={agent.needs.satiety} color="var(--satiety)" />
       <NeedBar label="Fun" value={agent.needs.fun} color="var(--fun)" />
@@ -185,7 +186,8 @@ function FeedItem({ event }: { event: WorldEvent }) {
         <li className="feed-item pinned-note">
           {time}
           <p>
-            <span className="feed-kicker">📌 Pinned a note on the notice board</span>“{event.data.text}”
+            <span className="feed-kicker">{event.data.question ? '❓ Asked everyone' : '📌 Pinned a note on the notice board'}</span>
+            “{event.data.text}”
           </p>
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
         </li>
@@ -216,7 +218,9 @@ function FeedItem({ event }: { event: WorldEvent }) {
         <li className="feed-item feed-letter">
           {time}
           <p>
-            <span className="feed-kicker">Letter from {event.data.from}</span>
+            <span className="feed-kicker">
+              {event.data.question ? `${event.data.from} answered “${event.data.question}”` : `Letter from ${event.data.from}`}
+            </span>
             {event.data.text && `“${event.data.text}”`}
           </p>
           {event.data.doodle && (

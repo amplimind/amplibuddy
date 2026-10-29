@@ -2,6 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   MAX_QUERY_CHARS,
   dayOf,
+  neighborPresent,
   formatTime,
   isActivityKind,
   type ActivityKind,
@@ -22,6 +23,7 @@ import {
   clipToSentence,
   isMissedToolCall,
   isNoVisionError,
+  summarizeResults,
   webSearch, type ToolCallRequest, type ToolCallResult, type WebSearchRequest } from './llm.ts';
 import {
   ampliChatUser,
@@ -60,6 +62,7 @@ import {
   type ModerationTarget,
 } from './prompts.ts';
 import { availableActivities, leastReadBook, offlineDecision, routineDecision } from './routine.ts';
+import { ollamaSearch, resultsBlock, searxngSearch, wikipediaSearch, withTopPage } from './search.ts';
 import { SimError, type SimClient } from './sim-client.ts';
 
 /** Sleep that starts before 06:00 still belongs to the previous day's diary. */
@@ -157,6 +160,8 @@ export class Mind {
   private noteFor: number | null = null;
   /** Cost of the query check, reported together with the search it belongs to. */
   private pendingBrowseMeta: LlmMeta[] = [];
+  /** Search providers that failed recently, until when to skip them. */
+  private searchDownUntil = new Map<string, number>();
   private moderating = false;
   private moderationPausedUntil = 0;
   private callTimes: number[] = [];
@@ -247,7 +252,9 @@ export class Mind {
     await this.sim.thinking().catch(() => {});
     const canBrowse = this.cfg.webSearch && ctx.browsesToday < this.cfg.searchesPerDay;
     const canPaint = ctx.artToday < this.cfg.artPerDay;
-    const canChat = ctx.chatsToday < this.cfg.chatsPerDay && this.neighbors.some((n) => n.place === 'cafe');
+    const canChat =
+      ctx.chatsToday < this.cfg.chatsPerDay &&
+      this.neighbors.some((n) => n.place === 'cafe' && neighborPresent(n, ctx.snapshot.simTime));
     const canPostNote = ctx.notesToday < this.cfg.notesPerDay;
     const kinds = availableActivities(ctx.snapshot.simTime, {
       mailWaiting: this.answering ? 0 : ctx.mail.waiting,
@@ -307,7 +314,7 @@ export class Mind {
         const { args, meta } = await this.llm({
           model: this.cfg.reflectModel,
           system: diarySystem(this.persona),
-          user: diaryUser(day, events, ctx.notebook, ctx.lastDiary),
+          user: diaryUser(day, events, ctx.notebook, ctx.lastDiary, ctx.snapshot.neighbors),
           tool: diaryTool,
           maxTokens: 1500,
           temperature: 0.8,
@@ -398,8 +405,10 @@ export class Mind {
       if (!text) throw new Error('the note came back empty');
       const check = await this.moderate('board', text);
       const held = check.verdict === 'hold';
-      await this.sim.note({ text, held, llm: [meta, check.meta] });
-      console.log(`[brain] note ${held ? `held (${check.reason})` : `pinned: "${text}"`} (${cost(meta)})`);
+      const question = args.question === true;
+      await this.sim.note({ text, held, question, llm: [meta, check.meta] });
+      const what = question ? 'question' : 'note';
+      console.log(`[brain] ${what} ${held ? `held (${check.reason})` : `pinned: "${text}"`} (${cost(meta)})`);
     } catch (err) {
       console.warn('[brain] note failed:', (err as Error).message);
     }
@@ -442,14 +451,7 @@ export class Mind {
   private async browse(ctx: BrainContext, query: string): Promise<void> {
     if (!this.llmAvailable(ctx)) return;
     try {
-      const result = await this.search({
-        model: this.cfg.brainModel,
-        system: browseSystem(this.persona),
-        query,
-        maxTokens: 400,
-        maxResults: 3,
-        excludeDomains: this.cfg.webExcludeDomains,
-      });
+      const result = await this.searchWithFallback(query);
       const takeaway = clipToSentence(result.text, MAX_TAKEAWAY_CHARS);
       const check = await this.moderate('note', takeaway);
       const request: BrowseRequest = {
@@ -558,9 +560,59 @@ export class Mind {
     return reason === '';
   }
 
+  /**
+   * Tries the configured search providers in order. A provider that fails (no credits,
+   * outage) is skipped for an hour, so one bad key doesn't cut Ampli off the web.
+   */
+  private async searchWithFallback(query: string) {
+    let lastError: unknown;
+    for (const provider of this.cfg.searchProviderOrder) {
+      if ((this.searchDownUntil.get(provider) ?? 0) > Date.now()) continue;
+      try {
+        if (provider !== 'openrouter') return await this.searchAndRead(provider, query);
+        return await this.search({
+          model: this.cfg.searchModel,
+          system: browseSystem(this.persona),
+          query,
+          maxTokens: 400,
+          maxResults: 3,
+          excludeDomains: this.cfg.webExcludeDomains,
+        });
+      } catch (err) {
+        lastError = err;
+        this.searchDownUntil.set(provider, Date.now() + 3_600_000);
+        console.warn(`[brain] ${provider} search failed, trying the next one: ${(err as Error).message}`);
+      }
+    }
+    throw lastError ?? new Error('no search provider available');
+  }
+
+  /** Search locally (SearXNG), with Ollama or Wikipedia, open the top page, let the model read. */
+  private async searchAndRead(provider: 'searxng' | 'ollama' | 'wikipedia', query: string) {
+    const found =
+      provider === 'searxng'
+        ? await searxngSearch(this.cfg.searxngUrl, query)
+        : provider === 'ollama'
+          ? await ollamaSearch(query, this.cfg.ollamaApiKey)
+          : await wikipediaSearch(query);
+    if (found.length === 0 && provider !== 'wikipedia') throw new Error(`${provider} found nothing for "${query}"`);
+    // Wikipedia hits already carry the article intro; for web results, read the best page.
+    const hits = provider === 'wikipedia' ? found : await withTopPage(found);
+    this.callTimes.push(Date.now());
+    const { text, meta } = await summarizeResults(this.cfg.llm, {
+      model: this.cfg.brainModel,
+      system: browseSystem(this.persona),
+      query,
+      results: resultsBlock(hits),
+      maxTokens: 400,
+      reasoning: this.cfg.reasoning,
+    });
+    return { text, sources: hits.map(({ title, url }) => ({ title, url })), meta };
+  }
+
   private search(req: WebSearchRequest) {
     this.callTimes.push(Date.now());
-    return webSearch(this.cfg.llm, { ...req, reasoning: this.cfg.reasoning });
+    return webSearch(this.cfg.searchEndpoint, { ...req, reasoning: this.cfg.reasoning });
   }
 
   /**

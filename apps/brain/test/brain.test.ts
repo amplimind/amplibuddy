@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { moodFrom, PLACES, type BrainContext, type BrainLetter, type LlmMeta, type Needs } from '@ampli-world/shared';
+import {
+  moodFrom,
+  neighborPresent,
+  parseHours,
+  PLACES,
+  type BrainContext,
+  type BrainLetter,
+  type LlmMeta,
+  type Needs,
+} from '@ampli-world/shared';
 import {
   clipToSentence,
   extractSources,
@@ -13,8 +22,9 @@ import {
   reasoningParam,
 } from '../src/llm.ts';
 import { chatPause, diaryDay, offlineDiary, toDecision, toReply, toVerdict } from '../src/mind.ts';
-import { ampliChatUser, buildPersonaPrompt, decideUser, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
+import { ampliChatUser, buildPersonaPrompt, decideUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
+import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, resultsBlock } from '../src/search.ts';
 
 const meta: LlmMeta = { model: 'm', promptTokens: 1, completionTokens: 1, costUsd: 0, latencyMs: 1 };
 
@@ -38,6 +48,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
       },
       mailWaiting: 0,
       latestArtId: null,
+      openQuestion: null,
       neighbors: [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe' }],
     },
     idle: true,
@@ -49,7 +60,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
       { id: 'b', title: 'B', author: 'y', blurb: '', timesRead: 0 },
     ],
     usageToday: { calls: 0, costUsd: 0 },
-    mail: { waiting: 0, oldestSimTime: null },
+    mail: { waiting: 0, oldestSimTime: null, answers: 0, oldestAnswerSimTime: null },
     browsesToday: 0,
     artToday: 0,
     chatsToday: 0,
@@ -152,7 +163,7 @@ test('offline diary tallies activities', () => {
 // --- Mail -------------------------------------------------------------------------
 
 function withMail(c: BrainContext, waiting: number, oldestSimTime: number): BrainContext {
-  return { ...c, mail: { waiting, oldestSimTime } };
+  return { ...c, mail: { waiting, oldestSimTime, answers: 0, oldestAnswerSimTime: null } };
 }
 
 test('check_mail is only offered when letters are waiting', () => {
@@ -326,11 +337,24 @@ test('doodles and artworks show up in Ampli\'s own memory of events', () => {
 
 // --- Neighbours ---------------------------------------------------------------------------
 
-test('chatting with Hedda: only offered with a neighbour, during café hours, under the cap', () => {
+test('chatting with Hedda: only offered when she is there (opening hours)', () => {
   assert.ok(!availableActivities(NOON).includes('chat'));
   assert.ok(availableActivities(NOON, { canChat: true }).includes('chat'));
-  assert.ok(!availableActivities(6 * 60, { canChat: true }).includes('chat'), 'café closed before 07:00');
-  assert.ok(!availableActivities(21.5 * 60, { canChat: true }).includes('chat'), 'and after 21:00');
+  const hedda = { hours: { from: 8, to: 12 } };
+  assert.ok(neighborPresent(hedda, 9 * 60));
+  assert.ok(!neighborPresent(hedda, 12 * 60), 'gone at noon');
+  assert.ok(!neighborPresent(hedda, 7 * 60 + 59));
+  assert.ok(neighborPresent({}, 3 * 60), 'no hours = always there');
+  assert.deepEqual(parseHours('8-12'), { from: 8, to: 12 });
+  assert.equal(parseHours('12-8'), undefined);
+});
+
+test('the prompt says when a neighbour is around', () => {
+  const c = ctx(9 * 60);
+  c.snapshot.neighbors = [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe', hours: { from: 8, to: 12 } }];
+  assert.match(decideUser(c, availableActivities(9 * 60)), /Hedda the hedgehog \(Café Kiosk, there 08:00-12:00, there now\)/);
+  c.snapshot.simTime = 15 * 60;
+  assert.match(decideUser(c, availableActivities(15 * 60)), /not there now/);
 });
 
 test('loneliness shows up in the prompt and makes company worth seeking', () => {
@@ -371,7 +395,7 @@ test('without neighbours the prompt says so and points to letters and the notice
 });
 
 test('with a neighbour the prompt names them', () => {
-  assert.match(decideUser(ctx(NOON), availableActivities(NOON)), /Who else lives here: Hedda the hedgehog at the Café Kiosk/);
+  assert.match(decideUser(ctx(NOON), availableActivities(NOON)), /Who else lives here: Hedda the hedgehog \(Café Kiosk\)/);
 });
 
 test('notes are offered under the daily cap only, and count as company', () => {
@@ -410,4 +434,118 @@ test('persona prompt: generic personality text plus the world configuration from
   assert.match(prompt, /^## Identity\nYou are a small being\./);
   assert.match(prompt, /## Your world configuration\n- Name: Ampli\n- Species: small fox\n- You live in Ampliville/);
   assert.equal(buildPersonaPrompt('just text'), 'just text');
+});
+
+// --- Ampli asks --------------------------------------------------------------------------------
+
+test('answers to Ampli\'s questions are fetched sooner and flagged in the prompt', () => {
+  const c = ctx(NOON);
+  c.mail = { waiting: 1, oldestSimTime: NOON - 40, answers: 1, oldestAnswerSimTime: NOON - 40 };
+  assert.equal(routineDecision(c, { canAnswerMail: true })?.plan.kind, 'check_mail', '40 sim minutes is enough for an answer');
+  c.mail = { waiting: 1, oldestSimTime: NOON - 40, answers: 0, oldestAnswerSimTime: null };
+  assert.equal(routineDecision(c, { canAnswerMail: true }), null, 'but not for an ordinary letter');
+
+  const p = decideUser({ ...ctx(NOON), mail: { waiting: 1, oldestSimTime: 600, answers: 1, oldestAnswerSimTime: 600 } }, availableActivities(NOON, { mailWaiting: 1 }));
+  assert.match(p, /including an answer to your question/);
+});
+
+test('an open question is visible in the prompt, and answers carry the question', () => {
+  const c = ctx(NOON);
+  c.snapshot.openQuestion = { id: 5, text: 'What should I paint?', simTime: 600 };
+  assert.match(decideUser(c, availableActivities(NOON)), /Your question "What should I paint\?" is still unanswered\./);
+  assert.match(replyUser(ctx(NOON), brainLetter({ question: 'What should I paint?' })), /This letter answers your question: "What should I paint\?"/);
+  const base = { id: 1, simTime: 600, realTime: '' } as const;
+  assert.equal(
+    describeEvent({ ...base, type: 'note_posted', data: { text: 'Any book tips?', question: true } }),
+    '10:00 You asked the people who watch you: "Any book tips?"',
+  );
+  assert.equal(
+    describeEvent({ ...base, type: 'mail_read', data: { letterId: 1, from: 'Mo', text: 'Try the chronicle.', question: 'Any book tips?', reply: 'Thanks!' } }),
+    '10:00 Mo answered your question "Any book tips?": "Try the chronicle." You replied: "Thanks!"',
+  );
+});
+
+test('open questions are surfaced next to the places that can answer them', () => {
+  const c = ctx(NOON);
+  c.notebook = ['I like the pond.', 'Do real foxes live in towns?'];
+  c.recentEvents = [
+    { id: 1, simTime: 600, realTime: '', type: 'reading', data: { bookId: 'b', title: 'B', takeaway: 'Tokens are pieces of words. How small can a token get?' } },
+  ];
+  const block = wonderingBlock(c, availableActivities(NOON, { canBrowse: true }));
+  assert.match(block, /look facts up at the internet café/);
+  assert.match(block, /- Do real foxes live in towns\?/);
+  assert.match(block, /- How small can a token get\?/);
+  assert.equal(wonderingBlock(ctx(NOON), availableActivities(NOON)), '', 'nothing to wonder about, no block');
+  assert.match(decideUser(c, availableActivities(NOON, { canBrowse: true })), /Things you've been wondering about/);
+});
+
+test('anti-echo: own thoughts are not replayed in the event list, only the last 3 as "say something new"', () => {
+  const c = ctx(NOON);
+  c.recentEvents = [1, 2, 3, 4, 5].map((i) => ({
+    id: i,
+    simTime: 600 + i,
+    realTime: '',
+    type: 'thought' as const,
+    data: { text: `thought number ${i}`, source: 'llm' as const },
+  }));
+  const prompt = decideUser(c, availableActivities(NOON));
+  assert.doesNotMatch(prompt, /You thought:/, 'no verbatim replay in "What happened"');
+  assert.doesNotMatch(prompt, /thought number 2/);
+  assert.match(prompt, /Your last thoughts \(for continuity only; say something new[^)]*\):\n- "thought number 3"\n- "thought number 4"\n- "thought number 5"/);
+});
+
+// --- Local web search -------------------------------------------------------------------------
+
+test('Ollama search results: only http(s) links, content trimmed', () => {
+  const hits = parseOllamaResults({
+    results: [
+      { title: 'Fountains', url: 'https://example.org/f', content: 'Water falls.' },
+      { title: 'evil', url: 'javascript:alert(1)', content: 'x' },
+      { url: 'https://example.com/', content: 'no title' },
+    ],
+  });
+  assert.deepEqual(hits.map((h) => h.title), ['Fountains', 'example.com']);
+});
+
+test('Wikipedia results keep search order and become linkable sources', () => {
+  const hits = parseWikipediaResults(
+    { query: { search: [{ pageid: 2, title: 'Red fox' }, { pageid: 1, title: 'Fountain' }, { pageid: 3, title: 'Empty' }] } },
+    {
+      query: {
+        pages: {
+          '1': { pageid: 1, title: 'Fountain', extract: 'A fountain is...' },
+          '2': { pageid: 2, title: 'Red fox', extract: 'The red fox is...' },
+          '3': { pageid: 3, title: 'Empty' },
+        },
+      },
+    },
+  );
+  assert.deepEqual(hits.map((h) => h.url), ['https://en.wikipedia.org/wiki/Red_fox', 'https://en.wikipedia.org/wiki/Fountain']);
+  assert.match(resultsBlock(hits), /^\[1\] Red fox \(Wikipedia\)\nThe red fox is/);
+  assert.equal(resultsBlock([]), '(no results)');
+});
+
+test('page reading: only public web addresses, visible text only', () => {
+  for (const ok of ['https://physics.stackexchange.com/q/1', 'http://example.org/a', 'https://fcbarcelona.com', 'https://fdic.gov']) {
+    assert.ok(isPublicWebUrl(ok), ok);
+  }
+  for (const bad of [
+    'http://localhost:4300/api/state',
+    'http://127.0.0.1:11434',
+    'http://192.168.1.10/admin',
+    'http://10.0.0.5',
+    'http://172.20.0.1',
+    'http://169.254.169.254/latest/meta-data',
+    'http://[::1]/',
+    'http://[fd00::1]/',
+    'http://printer.local/',
+    'file:///etc/passwd',
+    'javascript:alert(1)',
+  ]) {
+    assert.ok(!isPublicWebUrl(bad), bad);
+  }
+  assert.equal(
+    htmlToText('<html><head><title>x</title></head><body><script>evil()</script><p>Water &amp; sound&#33;</p><style>p{}</style></body></html>'),
+    'Water & sound!',
+  );
 });

@@ -1,0 +1,13 @@
+# SearXNG for Ampli's internet café: a local meta search (Google, Bing, DuckDuckGo, …)
+# over your own connection. No account, no key. Started with `npm run search:start`,
+# reachable only from this machine (127.0.0.1:8888). The secret key comes from the
+# SEARXNG_SECRET env var set by that script.
+use_default_settings: true
+server:
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json

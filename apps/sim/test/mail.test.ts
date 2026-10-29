@@ -486,3 +486,31 @@ test('notes: pinned ones are public, held ones never appear', async () => {
   const ctx = (await (await t.brain('/api/brain/context')).json()) as { notesToday: number };
   assert.equal(ctx.notesToday, 2, 'held notes count towards the cap too');
 });
+
+// --- Ampli asks ------------------------------------------------------------------------------
+
+test('questions: open until answered, answers are linked and hurry the brain', async () => {
+  const t = setup();
+  await t.brain('/api/brain/note', { text: 'What should I paint next?', question: true });
+  const open = t.sim.snapshot().openQuestion!;
+  assert.equal(open.text, 'What should I paint next?');
+
+  await t.brain('/api/brain/note', { text: 'Just a thought.' });
+  assert.equal(t.sim.snapshot().openQuestion?.id, open.id, 'plain notes are not questions');
+
+  assert.equal((await t.send({ name: 'Mo', text: 'x', inReplyTo: 999 })).status, 400);
+  const res = await t.send({ name: 'Mo', text: 'Paint the pond at night!', inReplyTo: open.id });
+  const letter = (await res.json()) as Letter;
+  assert.equal(letter.question, 'What should I paint next?');
+  assert.equal(t.sim.snapshot().openQuestion, null, 'answered');
+
+  await t.brain(`/api/brain/mail/${letter.id}/verdict`, { verdict: 'ok', reason: '' });
+  const ctx = (await (await t.brain('/api/brain/context')).json()) as { mail: { answers: number } };
+  assert.equal(ctx.mail.answers, 1);
+  const [waiting] = (await (await t.brain('/api/brain/mail/waiting')).json()) as BrainLetter[];
+  assert.equal(waiting!.question, 'What should I paint next?');
+
+  await t.brain(`/api/brain/mail/${letter.id}/reply`, { decision: 'reply', reply: 'I will!' });
+  const read = (await t.get<WorldEvent[]>('/api/events')).find((e) => e.type === 'mail_read')!;
+  assert.equal(read.type === 'mail_read' && read.data.question, 'What should I paint next?');
+});

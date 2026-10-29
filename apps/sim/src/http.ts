@@ -256,6 +256,13 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       return c.json({ error: 'The post box is full. Try again a bit later.' }, 429);
     }
 
+    let inReplyTo: { id: number; question: string } | undefined;
+    if (body.inReplyTo !== undefined) {
+      const q = typeof body.inReplyTo === 'number' ? store.question(body.inReplyTo) : null;
+      if (!q) return c.json({ error: 'That question is gone.' }, 400);
+      inReplyTo = { id: q.id, question: q.text };
+    }
+
     store.touchVisitor(visitor, name);
     const letter = store.createLetter({
       visitorId: visitor,
@@ -265,6 +272,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       simTime: engine.simTime,
       ipHash: ip,
       ...(doodle ? { doodle } : {}),
+      ...(inReplyTo ? { inReplyTo } : {}),
     });
     return c.json(letter, 201);
   });
@@ -534,7 +542,10 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       sim.log({ type: 'note_posted', data: { held: true } });
       return c.json({ ok: true, pinned: false });
     }
-    sim.log({ type: 'note_posted', data: { text, ...(metas[0] ? { llm: metas[0] } : {}) } });
+    sim.log({
+      type: 'note_posted',
+      data: { text, ...(body.question === true ? { question: true } : {}), ...(metas[0] ? { llm: metas[0] } : {}) },
+    });
     return c.json({ ok: true, pinned: true });
   });
 
@@ -616,6 +627,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
         .slice(0, MAX_NOTES);
       if (notes.length > 0) store.saveNotebook(engine.simTime, notes);
     }
+
     sim.log({ type: 'diary_written', data: { day } });
     return c.json({ ok: true });
   });
@@ -713,6 +725,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
               ...(letter.reply ? { reply: letter.reply } : {}),
               ...(letter.hasDoodle ? { doodle: true } : {}),
               ...(letter.doodleCaption ? { doodleCaption: letter.doodleCaption } : {}),
+              ...(letter.question ? { question: letter.question } : {}),
             }
           : { letterId: letter.id },
     });

@@ -3,6 +3,7 @@ import {
   ACTIVITY_KINDS,
   hourOf,
   isNight,
+  ANSWER_OVERDUE_MINUTES,
   MAIL_OVERDUE_MINUTES,
   minutesUntilMorning,
   type ActivityKind,
@@ -61,7 +62,8 @@ export function availableActivities(
     if (k === 'check_mail') return (opts.mailWaiting ?? 0) > 0;
     if (k === 'browse') return opts.canBrowse === true;
     if (k === 'paint') return opts.canPaint === true;
-    if (k === 'chat') return opts.canChat === true && h >= 7 && h < 21;
+    // Whether a neighbour is actually there right now is decided by the caller (opening hours).
+    if (k === 'chat') return opts.canChat === true;
     if (k === 'post_note') return opts.canPostNote === true;
     return true;
   });
@@ -69,8 +71,11 @@ export function availableActivities(
 
 /** Has the oldest letter in the post box waited too long? */
 export function mailOverdue(ctx: BrainContext): boolean {
-  const { oldestSimTime } = ctx.mail;
-  return oldestSimTime !== null && ctx.snapshot.simTime - oldestSimTime >= MAIL_OVERDUE_MINUTES;
+  const { oldestSimTime, oldestAnswerSimTime } = ctx.mail;
+  const now = ctx.snapshot.simTime;
+  // Answers to Ampli's own questions are worth hurrying for.
+  if (oldestAnswerSimTime !== null && now - oldestAnswerSimTime >= ANSWER_OVERDUE_MINUTES) return true;
+  return oldestSimTime !== null && now - oldestSimTime >= MAIL_OVERDUE_MINUTES;
 }
 
 /**

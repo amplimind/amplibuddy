@@ -8,7 +8,7 @@ const mind = new Mind(sim, loadPersonaPrompt(), config, loadNeighborPersonas());
 
 console.log(
   !config.llm.openRouter
-    ? `[brain] local LLM at ${config.llm.baseUrl}: thinking with ${config.brainModel}, reflecting with ${config.reflectModel} (no cost limits, internet café closed)`
+    ? `[brain] local LLM at ${config.llm.baseUrl}: thinking with ${config.brainModel}, reflecting with ${config.reflectModel} (no cost limits, internet café via ${config.webSearch ? config.searchProviderOrder.join(' → ') : 'nothing: WEB_SEARCH=off'})`
     : config.llm.apiKey
       ? `[brain] thinking with ${config.brainModel}, reflecting with ${config.reflectModel}, budget $${config.dailyBudgetUsd}/day`
       : '[brain] no OPENROUTER_API_KEY: running offline (rules + utility choices, no LLM)',

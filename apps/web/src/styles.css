@@ -817,3 +817,55 @@ img.admin-art {
 .pinned-note p {
   margin: 0 0 4px;
 }
+
+/* --- Ampli asks --- */
+
+.ask-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: #fff6d6;
+  border: 1px solid #f0dc94;
+  font-size: 14px;
+}
+
+.ask-question {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ask-card input,
+.ask-card textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e8d48f;
+  background: #fff;
+  color: var(--ink);
+  resize: vertical;
+}
+
+.ask-card button {
+  align-self: flex-end;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ask-card button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ask-thanks {
+  margin: 0;
+}

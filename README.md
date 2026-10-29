@@ -34,7 +34,16 @@ Locally one model does decisions, replies, diary and art: one download, one mode
 | `ornith:35b` | 3/3, ~1.3 s | no | 21 GB | fast, but can't see doodles |
 | `qwen3:14b` | 0/3 | no | 9 GB | doesn't make the tool calls |
 
-Thinking is switched off (`reasoning_effort: none`). A model that answers in prose instead of calling the tool gets one retry, and a model that can't see images gets the letter without the drawing (and is told so). All cost limits are ignored locally, the internet café stays closed (it needs OpenRouter's web plugin), and your OpenRouter key is never sent to other servers.
+Thinking is switched off (`reasoning_effort: none`). A model that answers in prose instead of calling the tool gets one retry, and a model that can't see images gets the letter without the drawing (and is told so). Cost limits are ignored locally, and your OpenRouter key is never sent to other servers. The internet café still works locally:
+
+| You have | Internet café searches with |
+|---|---|
+| `SEARXNG_URL` (run `npm run search:start`, needs Docker) | **Local SearXNG**: Google/Bing/DuckDuckGo through your own connection, free, no key; Ampli also reads the best page |
+| `OLLAMA_API_KEY` ([ollama.com/settings/keys](https://ollama.com/settings/keys); web search needs [usage credits](https://ollama.com/plans)) | Ollama web search; your local model reads the results |
+| only `OPENROUTER_API_KEY` | OpenRouter's web search (real web, ~$0.0075 per search, capped by `WEB_SEARCHES_PER_DAY`) |
+| neither | Wikipedia (no key; fine for facts, weak for open questions) |
+
+They're tried in that order: if one fails (no credits, outage), the next one takes over. `WEB_SEARCH_PROVIDER=ollama|openrouter|wikipedia` forces one.
 
 Without an `OPENROUTER_API_KEY` (and no `LLM_BASE_URL`), the brain runs **offline**: simple rules and scoring, canned thoughts, no LLM calls. That's enough to work on the world and the UI.
 

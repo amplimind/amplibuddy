@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename } from 'node:path';
-import { PLACES, parseFrontmatter, type Neighbor, type Persona, type PlaceId } from '@ampli-world/shared';
+import { PLACES, parseFrontmatter, parseHours, type Neighbor, type Persona, type PlaceId } from '@ampli-world/shared';
 
 export const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -43,6 +43,13 @@ export function loadNeighbors(): Neighbor[] {
     .filter(({ meta }) => meta.active !== 'false')
     .map(({ file, meta }) => {
       const place = (meta.place && meta.place in PLACES ? meta.place : 'cafe') as PlaceId;
-      return { id: basename(file, '.md'), name: meta.name ?? basename(file, '.md'), species: meta.species ?? 'animal', place };
+      const hours = parseHours(meta.hours);
+      return {
+        id: basename(file, '.md'),
+        name: meta.name ?? basename(file, '.md'),
+        species: meta.species ?? 'animal',
+        place,
+        ...(hours ? { hours } : {}),
+      };
     });
 }

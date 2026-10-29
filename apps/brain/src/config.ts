@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseFrontmatter } from '@ampli-world/shared';
+import { parseFrontmatter, parseHours } from '@ampli-world/shared';
 import { OPENROUTER_URL, parseReasoning, type LlmEndpoint } from './llm.ts';
 import { buildPersonaPrompt } from './prompts.ts';
+import type { SearchProvider } from './search.ts';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -12,6 +13,27 @@ if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 const baseUrl = (process.env.LLM_BASE_URL || OPENROUTER_URL).replace(/\/+$/, '');
 const openRouter = baseUrl === OPENROUTER_URL;
+
+/**
+ * Which search the internet café uses. On OpenRouter its web plugin. Locally: Ollama's
+ * web search with a (free) ollama.com key, else OpenRouter's search if there's a key for
+ * it (paid per search), else Wikipedia. WEB_SEARCH_PROVIDER forces one.
+ */
+function searchProviders(): SearchProvider[] {
+  const forced = process.env.WEB_SEARCH_PROVIDER;
+  if (forced === 'openrouter' || forced === 'ollama' || forced === 'wikipedia') return [forced];
+  if (forced === 'searxng') return ['searxng'];
+  const order: SearchProvider[] = [];
+  if (openRouter) order.push('openrouter');
+  if (process.env.SEARXNG_URL) order.push('searxng');
+  if (process.env.OLLAMA_API_KEY) order.push('ollama');
+  if (!openRouter && process.env.OPENROUTER_API_KEY) order.push('openrouter');
+  order.push('wikipedia');
+  return order;
+}
+/** Tried in order: if one fails (e.g. no credits), the next one takes over. */
+const searchProviderOrder = searchProviders();
+const searchProvider = searchProviderOrder[0]!;
 
 /**
  * Limits that only exist because calls cost money. They apply to OpenRouter only: a local
@@ -45,9 +67,29 @@ export const config = {
   dailyBudgetUsd: costLimit('LLM_DAILY_BUDGET_USD', 2),
   maxCallsPerHour: costLimit('LLM_MAX_CALLS_PER_HOUR', 120),
   reasoning: parseReasoning(process.env.LLM_REASONING),
-  // The internet café uses OpenRouter's web plugin, so it's closed with a local model.
-  webSearch: openRouter && process.env.WEB_SEARCH !== 'off',
-  searchesPerDay: costLimit('WEB_SEARCHES_PER_DAY', 20),
+  webSearch: process.env.WEB_SEARCH !== 'off',
+  // OpenRouter searches with its web plugin; elsewhere Ollama's web search (free ollama.com key)
+  // or, with no key at all, Wikipedia.
+  searchProvider,
+  searchProviderOrder,
+  ollamaApiKey: process.env.OLLAMA_API_KEY ?? '',
+  searxngUrl: process.env.SEARXNG_URL ?? '',
+  /** OpenRouter search, also usable while everything else runs locally. */
+  searchEndpoint: {
+    baseUrl: OPENROUTER_URL,
+    apiKey: process.env.OPENROUTER_API_KEY ?? '',
+    timeoutMs: 60_000,
+    openRouter: true,
+  } satisfies LlmEndpoint,
+  /** Model that searches and writes the note when the search goes through OpenRouter. */
+  searchModel:
+    process.env.WEB_SEARCH_MODEL || (openRouter ? process.env.BRAIN_MODEL || 'anthropic/claude-haiku-5.5' : 'deepseek/deepseek-v4.1-flash'),
+  // Paid searches stay capped even when the rest runs locally; a free first choice
+  // (SearXNG, Ollama credits aside) isn't capped, the paid one is only a rare fallback.
+  searchesPerDay:
+    searchProvider === 'openrouter'
+      ? Number(process.env.WEB_SEARCHES_PER_DAY || 20)
+      : costLimit('WEB_SEARCHES_PER_DAY', 20),
   artPerDay: costLimit('ART_PER_DAY', 10),
   chatsPerDay: costLimit('CHATS_PER_DAY', 12),
   notesPerDay: Number(process.env.NOTES_PER_DAY ?? 4),
@@ -70,6 +112,7 @@ export interface NeighborPersona {
   name: string;
   species: string;
   place: string;
+  hours?: { from: number; to: number };
   prompt: string;
 }
 
@@ -83,6 +126,14 @@ export function loadNeighborPersonas(): NeighborPersona[] {
     .filter(({ meta }) => meta.active !== 'false')
     .map(({ file, meta, body }) => {
       const id = basename(file, '.md');
-      return { id, name: meta.name ?? id, species: meta.species ?? 'animal', place: meta.place ?? 'cafe', prompt: body };
+      const hours = parseHours(meta.hours);
+      return {
+        id,
+        name: meta.name ?? id,
+        species: meta.species ?? 'animal',
+        place: meta.place ?? 'cafe',
+        ...(hours ? { hours } : {}),
+        prompt: body,
+      };
     });
 }

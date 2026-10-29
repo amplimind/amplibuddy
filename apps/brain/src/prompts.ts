@@ -9,14 +9,18 @@ import {
   PLACES,
   dayOf,
   describeNeed,
+  formatHours,
   formatTime,
   hourOf,
+  neighborPresent,
   parseFrontmatter,
   type ActivityKind,
   type BookWithText,
   type BrainContext,
   type BrainLetter,
   type DiaryEntry,
+  type EventType,
+  type Neighbor,
   type WorldEvent,
 } from '@ampli-world/shared';
 import type { ToolSpec } from './llm.ts';
@@ -82,14 +86,18 @@ export function describeEvent(e: WorldEvent): string | null {
       // Private letters arrive here without content by design: nothing to leak.
       if (!e.data.from) return `${at} You read a private letter.`;
       const drawing = e.data.doodle ? ` with a drawing${e.data.doodleCaption ? ` (${e.data.doodleCaption})` : ''}` : '';
+      if (e.data.question) {
+        return `${at} ${e.data.from} answered your question "${e.data.question}"${drawing}: "${e.data.text}"${e.data.reply ? ` You replied: "${e.data.reply}"` : ''}`;
+      }
       const said = e.data.text ? `: "${e.data.text}"` : '';
       return e.data.reply
         ? `${at} You read a letter from ${e.data.from}${drawing}${said} You replied: "${e.data.reply}"`
         : `${at} You read a letter from ${e.data.from}${drawing}${said} You didn't reply.`;
     }
     case 'note_posted':
-      return e.data.held
-        ? `${at} You wrote a note, but it didn't pass the content check, so it's not on the notice board.`
+      if (e.data.held) return `${at} You wrote a note, but it didn't pass the content check, so it's not on the notice board.`;
+      return e.data.question
+        ? `${at} You asked the people who watch you: "${e.data.text}"`
         : `${at} You pinned a note on the notice board: "${e.data.text}"`;
     case 'chat_line':
       return e.data.speaker === 'ampli'
@@ -119,6 +127,53 @@ const OPTION_ORDER: ActivityKind[] = [
   'nap',
   'sleep',
 ];
+
+/**
+ * Questions Ampli has been carrying around (notebook lines and recent book notes with a
+ * question mark), next to the places that can answer them. Curiosity needs a concrete
+ * question before a web search makes sense.
+ */
+export function wonderingBlock(ctx: BrainContext, kinds: ActivityKind[]): string {
+  const fromNotebook = ctx.notebook.filter((n) => n.includes('?'));
+  const fromReading = ctx.recentEvents
+    .filter((e) => e.type === 'reading' && e.data.takeaway.includes('?'))
+    .map((e) => (e.type === 'reading' ? e.data.takeaway.slice(e.data.takeaway.lastIndexOf('.', e.data.takeaway.indexOf('?')) + 1).trim() : ''))
+    .filter(Boolean);
+  const questions = [...new Set([...fromNotebook, ...fromReading])].slice(-3);
+  if (questions.length === 0) return '';
+  const where = [
+    kinds.includes('browse') && 'look facts up at the internet café',
+    kinds.includes('read') && 'read in the library',
+    kinds.includes('think') && 'think it through on the bench',
+    kinds.includes('post_note') && 'ask the people who watch you',
+  ].filter(Boolean);
+  return `\nThings you've been wondering about${where.length > 0 ? ` (you can ${where.join(', ')})` : ''}:
+${questions.map((q) => `- ${q}`).join('\n')}
+`;
+}
+
+/**
+ * What happened, without Ampli's own earlier thoughts: feeding a model its own words
+ * back verbatim makes it repeat them. The few thoughts that matter for continuity are
+ * shown separately by `lastThoughtsBlock`, with an explicit "say something new".
+ */
+export function recentLines(ctx: BrainContext, limit: number, skip: EventType[] = []): string[] {
+  return ctx.recentEvents
+    .filter((e) => e.type !== 'thought' && !skip.includes(e.type))
+    .map(describeEvent)
+    .filter((l): l is string => l !== null)
+    .slice(-limit);
+}
+
+export function lastThoughtsBlock(ctx: BrainContext, count = 3): string {
+  const thoughts = ctx.recentEvents
+    .filter((e) => e.type === 'thought')
+    .slice(-count)
+    .map((e) => (e.type === 'thought' ? `- "${e.data.text}"` : ''));
+  return thoughts.length > 0
+    ? `Your last thoughts (for continuity only; say something new, don't reuse their words or images):\n${thoughts.join('\n')}\n\n`
+    : '';
+}
 
 /** "coffee ×2, stroll" for the current sim day, so repetition is visible to the model. */
 export function todaySoFar(ctx: BrainContext): string {
@@ -179,6 +234,7 @@ ${GROUND_RULES}
 ## Your job right now
 Decide what to do next. Nobody tells you what to do: choose what you actually feel like, given your body, your mood, what you remember and the time of day. Act like yourself: let your personality, not just your needs, drive the choice. Having favourite things is fine, but don't repeat what you just did unless your body really needs it.
 Your thought appears in the public feed, so make it a genuine, specific inner monologue (1-2 short sentences), not a description of the menu.
+Keep it fresh: no phrases, images or running motifs from your recent thoughts, and don't recite your needs; mention your body only when it actually decides the choice. A short plain thought is better than a repeated one.
 Answer by calling the \`decide\` tool once.`;
 }
 
@@ -186,7 +242,7 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
   const { simTime, agent } = ctx.snapshot;
   const place = agent.place ? PLACES[agent.place] : null;
   const n = agent.needs;
-  const recent = ctx.recentEvents.map(describeEvent).filter(Boolean).slice(-15);
+  const recent = recentLines(ctx, 15);
 
   const options = [...kinds]
     .sort((a, b) => OPTION_ORDER.indexOf(a) - OPTION_ORDER.indexOf(b))
@@ -212,21 +268,29 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
   const neighbors = ctx.snapshot.neighbors;
   const around =
     neighbors.length > 0
-      ? `Who else lives here: ${neighbors.map((n) => `${n.name} the ${n.species} at the ${PLACES[n.place].name}`).join(', ')}. Nobody else.`
+      ? `Who else lives here: ${neighbors
+          .map((n) => {
+            const when = n.hours ? `, there ${formatHours(n.hours)}${neighborPresent(n, simTime) ? ', there now' : ', not there now'}` : '';
+            return `${n.name} the ${n.species} (${PLACES[n.place].name}${when})`;
+          })
+          .join(', ')}. Nobody else.`
       : 'Nobody else lives in Ampliville: you can\'t talk to anyone in person.';
   const company = `\n${around} Your company comes from the colleagues who watch you: their letters in the post box, and the notes you can pin on the notice board inviting them to write.`;
 
   const today = todaySoFar(ctx);
 
-  const { waiting, oldestSimTime } = ctx.mail;
+  const { waiting, oldestSimTime, answers } = ctx.mail;
+  const answerNote = answers > 0 ? `, ${answers === 1 ? 'including an answer' : `including ${answers} answers`} to your question` : '';
   const mail =
     waiting > 0 && oldestSimTime !== null
-      ? `\n${waiting === 1 ? 'A letter is' : `${waiting} letters are`} waiting for you in the post box at the plaza (the oldest since ${formatTime(oldestSimTime)}).`
+      ? `\n${waiting === 1 ? 'A letter is' : `${waiting} letters are`} waiting for you in the post box at the plaza (the oldest since ${formatTime(oldestSimTime)}${answerNote}).`
       : '';
+  const open = ctx.snapshot.openQuestion;
+  const asked = open ? `\nYour question "${open.text}" is still unanswered.` : '';
 
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)} — ${partOfDay(simTime)}.
 You are at ${place ? `${place.name}. ${place.description}` : 'somewhere in town'}${justFinished}${mail}${company}
-Today so far: ${today || 'nothing yet'}.
+Today so far: ${today || 'nothing yet'}.${asked}
 
 How you feel:
 - energy: ${describeNeed(n.energy)}
@@ -237,14 +301,14 @@ How you feel:
 
 Your notebook (your long-term memory):
 ${notebookBlock(ctx.notebook)}
-
+${wonderingBlock(ctx, kinds)}
 Your last diary entry:
 ${diaryBlock(ctx.lastDiary)}
 
 What happened recently (oldest first):
 ${recent.length > 0 ? recent.join('\n') : '(nothing yet — you just woke up in this town)'}
 
-What you can do (walking to another place takes a few minutes):
+${lastThoughtsBlock(ctx)}What you can do (walking to another place takes a few minutes):
 ${options}
 
 Books in the library:
@@ -323,12 +387,24 @@ ${GROUND_RULES}
 You are curling up in bed at the end of the day. Before you fall asleep:
 1. Write tonight's diary entry: honest, specific to what happened today, including how things felt. 80-180 words.
 2. Rewrite your notebook. It is your only long-term memory: preferences, opinions, things you learned from books, open questions, plans. Keep what still matters, update what changed, merge duplicates, drop what no longer matters. At most ${NOTEBOOK_LIMIT} short notes.
+   Among them, keep one or two concrete things you'd like to find out, phrased as a question: facts you could look up or read about, not only big questions about life.
+   Drop questions and habits you've been circling for days without getting anywhere, or turn them into something concrete. Only keep notes about beings who actually live in town (listed below) or people who wrote to you.
 Answer by calling the \`write_diary\` tool once.`;
 }
 
-export function diaryUser(day: number, events: WorldEvent[], notebook: string[], previous: DiaryEntry | null): string {
+export function diaryUser(
+  day: number,
+  events: WorldEvent[],
+  notebook: string[],
+  previous: DiaryEntry | null,
+  neighbors: Neighbor[] = [],
+): string {
   const lines = events.map(describeEvent).filter(Boolean);
-  return `It is the end of day ${day}.
+  const town =
+    neighbors.length > 0
+      ? `Who else lives in town: ${neighbors.map((n) => `${n.name} the ${n.species}`).join(', ')}. Nobody else.`
+      : 'Nobody else lives in town; your company is the people who write to you.';
+  return `It is the end of day ${day}. ${town}
 
 Your notebook so far:
 ${notebookBlock(notebook)}
@@ -429,7 +505,7 @@ ${ctx.books.map((b) => `- "${b.title}" by ${b.author}. ${b.blurb} (you've read i
 
 The visitor signed as "${letter.name}". This letter is ${audience}.
 ${visitorBlock(letter)}
-${letter.hasDoodle ? 'The letter comes with a drawing (attached as an image).\n' : ''}
+${letter.question ? `This letter answers your question: "${letter.question}"\n` : ''}${letter.hasDoodle ? 'The letter comes with a drawing (attached as an image).\n' : ''}
 <letter>
 ${escapeLetter(letter.text) || '(no text, just the drawing)'}
 </letter>`;
@@ -553,7 +629,7 @@ Answer by calling the \`create_artwork\` tool once.`;
 
 export function paintUser(ctx: BrainContext): string {
   const { simTime, agent } = ctx.snapshot;
-  const recent = ctx.recentEvents.map(describeEvent).filter(Boolean).slice(-12);
+  const recent = recentLines(ctx, 12);
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)} — ${partOfDay(simTime)}. Mood: ${agent.mood.label}.
 
 Your notebook:
@@ -604,11 +680,7 @@ function transcriptBlock(transcript: ChatTurn[]): string {
 export function ampliChatUser(ctx: BrainContext, partner: string, transcript: ChatTurn[]): string {
   const { simTime, agent } = ctx.snapshot;
   const n = agent.needs;
-  const recent = ctx.recentEvents
-    .filter((e) => e.type !== 'chat_line')
-    .map(describeEvent)
-    .filter(Boolean)
-    .slice(-10);
+  const recent = recentLines(ctx, 10, ['chat_line']);
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. You're at the café counter with ${partner}.
 Mood: ${agent.mood.label}. Energy ${describeNeed(n.energy)}, hunger ${describeNeed(n.satiety)}, company ${describeNeed(n.social)}.
 
@@ -682,8 +754,12 @@ export const noteTool: ToolSpec = {
     type: 'object',
     properties: {
       text: { type: 'string', description: `The note, 1-3 sentences, at most ${MAX_NOTE_CHARS} characters.` },
+      question: {
+        type: 'boolean',
+        description: 'True if you are asking for something (an answer, an idea, a recommendation, help) and hope for a reply.',
+      },
     },
-    required: ['text'],
+    required: ['text', 'question'],
   },
 };
 
@@ -693,14 +769,14 @@ export function noteSystem(persona: string): string {
 ${GROUND_RULES}
 
 ## Your job right now
-You're at the notice board on the plaza. Write a short note for the colleagues who watch you live here; they can answer with a letter to your post box. Say something real: what's on your mind, something you'd like to know about their lives, or a small invitation. 1-3 sentences, at most ${MAX_NOTE_CHARS} characters.
-Don't beg, don't guilt-trip, don't repeat an earlier note.
+You're at the notice board on the plaza. Write a short note for the people who watch you live here; they can answer you directly. If you need or want something (an answer to an open question, an idea, a recommendation, a bit of company), ask for it plainly and set \`question\` to true. Otherwise share what's on your mind. 1-3 sentences, at most ${MAX_NOTE_CHARS} characters.
+Ask one clear thing at a time. Don't beg, don't guilt-trip, don't repeat an earlier note, and don't ask again while an earlier question is still unanswered.
 Answer by calling the \`pin_note\` tool once.`;
 }
 
 export function noteUser(ctx: BrainContext): string {
   const { simTime, agent } = ctx.snapshot;
-  const recent = ctx.recentEvents.map(describeEvent).filter(Boolean).slice(-12);
+  const recent = recentLines(ctx, 12);
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. Mood: ${agent.mood.label}, company ${describeNeed(agent.needs.social)}.
 
 Your notebook:

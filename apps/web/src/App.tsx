@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatClock } from '@ampli-world/shared';
+import { AskCard } from './AskCard.tsx';
 import { Gallery } from './Gallery.tsx';
 import { Mailbox } from './Mailbox.tsx';
 import { DiaryView, Feed, HowItWorks, NotebookView, StatusCard } from './Panel.tsx';
@@ -43,6 +44,7 @@ export function App() {
 
         <aside className="side">
           {snapshot && <StatusCard snapshot={snapshot} events={events} />}
+          {snapshot && <AskCard snapshot={snapshot} />}
 
           <nav className="tabs" role="tablist">
             {TABS.map((t) => (

@@ -16,6 +16,8 @@ export const VISITOR_RETENTION_DAYS = 90;
 export const LETTERS_PER_CHECK = 5;
 /** After this many sim minutes of waiting, a routine rule sends Ampli to the post box. */
 export const MAIL_OVERDUE_MINUTES = 180;
+/** Answers to Ampli's own questions are worth hurrying for. */
+export const ANSWER_OVERDUE_MINUTES = 30;
 
 export type LetterVisibility = 'public' | 'private';
 
@@ -41,6 +43,8 @@ export interface Letter {
   hasDoodle: boolean;
   /** What Ampli saw in the doodle, once it has replied. */
   doodleCaption?: string;
+  /** The question of Ampli's this letter answers, if any. */
+  question?: string;
   reply?: string;
   repliedSimTime?: number;
 }
@@ -48,6 +52,9 @@ export interface Letter {
 export interface MailStats {
   waiting: number;
   oldestSimTime: number | null;
+  /** Waiting letters that answer one of Ampli's questions, and the oldest of them. */
+  answers: number;
+  oldestAnswerSimTime: number | null;
 }
 
 export interface SendLetterRequest {
@@ -57,6 +64,8 @@ export interface SendLetterRequest {
   private: boolean;
   /** data:image/png;base64,… */
   doodle?: string;
+  /** Event id of the question (a note_posted with question: true) this letter answers. */
+  inReplyTo?: number;
 }
 
 export type Verdict = 'ok' | 'hold';

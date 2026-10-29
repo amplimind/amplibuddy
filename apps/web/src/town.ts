@@ -4,6 +4,7 @@ import {
   MAP_WIDTH,
   PLACES,
   hourOf,
+  neighborPresent,
   pointAlong,
   type ActivityKind,
   type PlaceDef,
@@ -832,8 +833,7 @@ export function drawFrame(
   updateReveal(state, { x: pos.x + 0.5, y: pos.y + 0.5 }, now);
   drawEasel(ctx, state, snapshot.latestArtId);
   // Neighbours stand at their place during opening hours (under the roof, so visible when you look inside).
-  const hour = hourOf(simNow);
-  const heddaHere = snapshot.neighbors.some((n) => n.place === 'cafe') && hour >= 7 && hour < 21;
+  const heddaHere = snapshot.neighbors.some((n) => n.place === 'cafe' && neighborPresent(n, simNow));
   if (heddaHere) drawHedgehog(ctx, px(HEDDA.x), px(HEDDA.y), Math.sin(now / 700) * 0.6);
   drawRoofsAndLabels(ctx, state.reveal);
 
@@ -865,6 +865,14 @@ export function drawFrame(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('✉️', px(POST_BOX.x), px(POST_BOX.y) - 20 + Math.sin(now / 400) * 2);
+  }
+
+  // An unanswered question floats next to Ampli.
+  if (snapshot.openQuestion) {
+    ctx.font = '15px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('❓', x - 14, y - 20 + Math.sin(now / 450 + 1) * 2);
   }
 
   // Status icon above the head.

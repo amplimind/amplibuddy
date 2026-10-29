@@ -53,6 +53,7 @@ export class Sim {
       agent: this.engine.agent,
       mailWaiting: this.store.mailStats().waiting,
       latestArtId: this.store.latestArtId(),
+      openQuestion: this.store.openQuestion(),
     };
   }
 

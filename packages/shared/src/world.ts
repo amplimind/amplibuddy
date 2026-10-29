@@ -189,7 +189,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     place: 'plaza',
     verb: 'pinning a note to the notice board',
     description:
-      'Write a short note to the colleagues who watch you and pin it on the notice board at the plaza. They can answer with a letter.',
+      'Ask the people who watch you for something you need or want to know (an answer, an idea, a recommendation, company), or just share a thought. Pinned on the notice board at the plaza; they can answer you directly.',
     minutes: 20,
     rates: { energy: -2, satiety: -3, fun: 8, social: 30 },
   },
@@ -316,4 +316,24 @@ export function parseFrontmatter(text: string): { meta: Record<string, string>; 
     if (i > 0) meta[line.slice(0, i).trim()] = line.slice(i + 1).trim();
   }
   return { meta, body: match[2]!.trim() };
+}
+
+/** "8-12" -> { from: 8, to: 12 }; anything else -> undefined (always there). */
+export function parseHours(value: string | undefined): { from: number; to: number } | undefined {
+  const m = /^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(value ?? '');
+  if (!m) return undefined;
+  const from = Number(m[1]);
+  const to = Number(m[2]);
+  return from >= 0 && to <= 24 && from < to ? { from, to } : undefined;
+}
+
+/** Is a neighbour at their place at this sim time? */
+export function neighborPresent(n: { hours?: { from: number; to: number } }, simTime: number): boolean {
+  if (!n.hours) return true;
+  const h = hourOf(simTime);
+  return h >= n.hours.from && h < n.hours.to;
+}
+
+export function formatHours(hours: { from: number; to: number }): string {
+  return `${String(hours.from).padStart(2, '0')}:00-${String(hours.to).padStart(2, '0')}:00`;
 }

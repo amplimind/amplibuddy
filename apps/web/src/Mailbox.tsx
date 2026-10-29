@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<LetterStatus, string> = {
 
 const NAME_KEY = 'aw_name';
 
-function readName(): string {
+export function readName(): string {
   try {
     return localStorage.getItem(NAME_KEY) ?? '';
   } catch {
@@ -33,7 +33,7 @@ function readName(): string {
   }
 }
 
-function saveName(name: string): void {
+export function saveName(name: string): void {
   try {
     localStorage.setItem(NAME_KEY, name);
   } catch {
@@ -89,6 +89,7 @@ function LetterCard({ letter, author, showStatus }: { letter: Letter; author: st
         {letter.visibility === 'private' && <span className="badge">private</span>}
         {showStatus && <span className={`badge status-${letter.status}`}>{STATUS_LABEL[letter.status]}</span>}
       </div>
+      {letter.question && <p className="hint">In answer to: “{letter.question}”</p>}
       {letter.text && <p className="letter-text">{letter.text}</p>}
       {letter.hasDoodle && (
         <img

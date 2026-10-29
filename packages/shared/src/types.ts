@@ -89,6 +89,8 @@ export interface Neighbor {
   name: string;
   species: string;
   place: PlaceId;
+  /** Hours of the day the neighbour is there, e.g. { from: 8, to: 12 }. Absent = always. */
+  hours?: { from: number; to: number };
 }
 
 export interface WorldSnapshot {
@@ -101,6 +103,8 @@ export interface WorldSnapshot {
   mailWaiting: number;
   /** Newest artwork in the gallery, shown on the easel in the studio. */
   latestArtId: number | null;
+  /** Ampli's latest question if nobody has answered it yet (shown as ❓ and as an answer card). */
+  openQuestion: { id: number; text: string; simTime: number } | null;
 }
 
 export type ThoughtSource = 'llm' | 'routine' | 'offline';
@@ -129,12 +133,21 @@ export type EventBody =
   /** Public letters carry content; private (or held) ones carry only the id. */
   | {
       type: 'mail_read';
-      data: { letterId: number; from?: string; text?: string; reply?: string; doodle?: boolean; doodleCaption?: string };
+      data: {
+        letterId: number;
+        from?: string;
+        text?: string;
+        reply?: string;
+        doodle?: boolean;
+        doodleCaption?: string;
+        /** Ampli's question this letter answered. */
+        question?: string;
+      };
     }
   /** One line of a conversation between Ampli and a neighbour. */
   | { type: 'chat_line'; data: { chatId: number; speaker: string; name: string; text: string; llm?: LlmMeta } }
   /** A note Ampli pinned on the notice board. Held notes carry no text, only `held`, so Ampli knows. */
-  | { type: 'note_posted'; data: { text?: string; held?: boolean; llm?: LlmMeta } }
+  | { type: 'note_posted'; data: { text?: string; held?: boolean; question?: boolean; llm?: LlmMeta } }
   | { type: 'artwork_created'; data: { artworkId: number; title: string; caption: string; llm?: LlmMeta } }
   /** A web search at the internet café. No takeaway when the outbound check held it. */
   | { type: 'browsed'; data: { query: string; takeaway?: string; sources: WebSource[]; llm?: LlmMeta } };
@@ -261,6 +274,8 @@ export interface NeighborNotesRequest {
 
 export interface NoteRequest {
   text: string;
+  /** True when Ampli asks for something and hopes for an answer. */
+  question?: boolean;
   /** Outbound check said no: don't pin it. */
   held?: boolean;
   llm?: LlmMeta[];
