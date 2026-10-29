@@ -3,8 +3,8 @@ import type { ActivityKind, Needs, PlaceId, Point } from './types.ts';
 // The town is a 40x24 tile grid. Every place has a door on its own vertical
 // lane; all lanes join the main street at y = MAIN_STREET_Y.
 
-export const MAP_WIDTH = 40;
-export const MAP_HEIGHT = 24;
+export const MAP_WIDTH = 56;
+export const MAP_HEIGHT = 30;
 export const MAIN_STREET_Y = 12;
 /**
  * Walking pace on screen, in tiles per real second. Deliberately independent of
@@ -65,6 +65,14 @@ export const PLACES: Record<PlaceId, PlaceDef> = {
     door: { x: 14, y: 7 },
     spot: { x: 14, y: 4 }, // at the easel
     description: 'An easel by the big window, paint pots everywhere, and your own pictures on the walls.',
+  },
+  workshop: {
+    id: 'workshop',
+    name: 'Workshop',
+    area: { x: 41, y: 14, w: 10, h: 9 },
+    door: { x: 44, y: 13 },
+    spot: { x: 44, y: 18 }, // in the middle of the stations
+    description: 'Where GyrOS works: an AI system that turns Jira tickets into pull requests, step by step, with a human in the loop.',
   },
   netcafe: {
     id: 'netcafe',
@@ -196,10 +204,19 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
   chat: {
     kind: 'chat',
     place: 'cafe',
-    verb: 'chatting with Hedda at the counter',
-    description: 'Have a chat with Hedda, the hedgehog who runs the café (07:00-21:00).',
+    verb: 'chatting with a neighbour',
+    description: 'Have a chat with a neighbour who is around right now, at their place.',
     minutes: 30,
     rates: { energy: -2, satiety: -2, fun: 14, social: 70 },
+  },
+  visit_workshop: {
+    kind: 'visit_workshop',
+    place: 'workshop',
+    verb: 'watching GyrOS at the workshop',
+    description:
+      'Go to the workshop and watch GyrOS turn tickets into pull requests; explain to the people watching what is happening and whether it needs them.',
+    minutes: 30,
+    rates: { energy: -2, satiety: -4, fun: 16, social: 6 },
   },
   check_mail: {
     kind: 'check_mail',

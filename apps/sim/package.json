@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "dev": "tsx watch --clear-screen=false --include ../../data/settings.json --include '../../data/world/**/*.md' src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc --noEmit -p ."
   },

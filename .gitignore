@@ -2,6 +2,11 @@ node_modules
 dist
 data/*.db
 data/*.db-*
+# Your settings and your own characters (made in the setup wizard)
+data/settings.json
+data/world/
+data/logs/
+.runtime/
 .env
 .DS_Store
 *.log

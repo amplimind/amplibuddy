@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { VISITOR_RETENTION_DAYS, formatClock } from '@ampli-world/shared';
 import { config, loadNeighbors, loadPersona } from './config.ts';
+import { GyrosBridge } from './gyros.ts';
 import { createApp } from './http.ts';
 import { loadLibrary } from './library.ts';
 import { Sim } from './sim.ts';
@@ -28,6 +29,14 @@ const timer = setInterval(() => {
   if (++ticks % SAVE_EVERY_TICKS === 0) sim.save();
 }, TICK_MS);
 
+if (config.gyrosUrl) {
+  sim.gyros = new GyrosBridge(config.gyrosUrl, config.gyrosUiUrl || null, (body) => sim.log(body), {
+    nudgeAfterMs: Math.max(0, config.gyrosNudgeAfterMin) * 60_000,
+    memory: { load: () => store.loadGyrosNudges(), save: (m) => store.saveGyrosNudges(m) },
+  });
+  sim.gyros.start();
+}
+
 /** Deletes visitors (and everything about them) whose last visit is too long ago. */
 function retentionSweep() {
   const cutoff = new Date(Date.now() - VISITOR_RETENTION_DAYS * 86_400_000).toISOString();
@@ -46,7 +55,7 @@ const app = createApp(sim, {
   sitePassword: config.sitePassword,
 });
 if (!config.sitePassword) console.warn('[sim] SITE_PASSWORD is empty: only run this on a trusted network (VPN/office).');
-const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
+const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {
   console.log(
     `[sim] ${persona.name} lives at http://localhost:${port} · ${formatClock(sim.engine.simTime)} · ` +
       `${books.size} books · ${config.minutesPerSecond} sim min/s`,
@@ -56,6 +65,7 @@ const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
 function shutdown() {
   clearInterval(timer);
   clearInterval(sweeper);
+  sim.gyros?.stop();
   sim.save();
   store.close();
   server.close();

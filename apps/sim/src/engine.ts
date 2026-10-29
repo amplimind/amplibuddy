@@ -10,6 +10,7 @@ import {
   walkMinutes,
   type AgentState,
   type EventBody,
+  type PlaceId,
   type Plan,
 } from '@ampli-world/shared';
 
@@ -58,6 +59,11 @@ export class Engine {
     private readonly bookTitle: (id: string) => string | undefined = () => undefined,
     /** Sim speed; walks are timed so they look the same at any speed. */
     private readonly minutesPerSecond = 1,
+    /** A chat partner's name and place, or undefined if there's no such neighbour. */
+    private readonly partner: (partnerId: string | undefined) => { name: string; place: PlaceId } | undefined = () => ({
+      name: 'a neighbour',
+      place: 'cafe',
+    }),
   ) {
     this.simTime = state.simTime;
     this.agent = state.agent;
@@ -108,44 +114,54 @@ export class Engine {
     if (!def) return { ok: false, error: `unknown activity ${plan.kind}` };
     if (plan.kind === 'read' && !plan.bookId) return { ok: false, error: 'read needs a bookId' };
     if (plan.kind === 'browse' && !plan.query) return { ok: false, error: 'browse needs a query' };
+    const to = this.placeOf(plan);
+    if (!to) return { ok: false, error: `nobody to ${plan.kind} with` };
 
     this.agent.thinking = false;
     const from = this.agent.place ?? 'plaza';
-    if (from === def.place) {
-      this.startActivity(plan);
+    if (from === to) {
+      this.startActivity(plan, to);
     } else {
       this.agent.place = null;
       this.agent.next = plan;
       this.agent.walk = {
         from,
-        to: def.place,
-        path: pathBetween(from, def.place),
+        to,
+        path: pathBetween(from, to),
         startedAt: this.simTime,
-        endsAt: this.simTime + walkMinutes(from, def.place, this.minutesPerSecond),
+        endsAt: this.simTime + walkMinutes(from, to, this.minutesPerSecond),
       };
-      this.emit({ type: 'walk_started', data: { from, to: def.place } }, this.simTime);
+      this.emit({ type: 'walk_started', data: { from, to } }, this.simTime);
     }
     return { ok: true };
   }
 
-  private startActivity(plan: Plan): void {
+  /** Where a plan happens: the activity's place, or for a chat the partner's place. */
+  private placeOf(plan: Plan): PlaceId | undefined {
+    if (plan.kind === 'chat') return this.partner(plan.partnerId)?.place;
+    return ACTIVITIES[plan.kind].place;
+  }
+
+  private startActivity(plan: Plan, place: PlaceId): void {
     const def = ACTIVITIES[plan.kind];
     const minutes = plan.kind === 'sleep' ? minutesUntilMorning(this.simTime) : def.minutes;
     this.agent.activity = {
       ...plan,
-      place: def.place,
+      place,
       startedAt: this.simTime,
       endsAt: this.simTime + minutes,
     };
     const bookTitle = plan.bookId ? this.bookTitle(plan.bookId) : undefined;
+    const partner = plan.kind === 'chat' ? this.partner(plan.partnerId)?.name : undefined;
     this.emit(
       {
         type: 'activity_started',
         data: {
           kind: plan.kind,
-          place: def.place,
+          place,
           ...(bookTitle ? { bookTitle } : {}),
           ...(plan.query ? { query: plan.query } : {}),
+          ...(partner ? { with: partner } : {}),
         },
       },
       this.simTime,
@@ -160,7 +176,7 @@ export class Engine {
       this.agent.position = { ...PLACES[walk.to].spot };
       const next = this.agent.next;
       this.agent.next = null;
-      if (next) this.startActivity(next);
+      if (next) this.startActivity(next, walk.to);
       return;
     }
     if (activity) {

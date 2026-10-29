@@ -159,3 +159,21 @@ test('worlds saved before the social need get a default', () => {
   const engine = new Engine(state, () => {});
   assert.equal(engine.agent.needs.social, 60);
 });
+
+test('a chat happens where the partner is, and names them', () => {
+  const events: { body: EventBody; simTime: number }[] = [];
+  const partners = { bruno: { name: 'Bruno', place: 'park' as const } };
+  const engine = new Engine(
+    initialState(),
+    (body, simTime) => events.push({ body, simTime }),
+    () => undefined,
+    1,
+    (id) => (id ? partners[id as keyof typeof partners] : undefined),
+  );
+  assert.deepEqual(engine.plan({ kind: 'chat', partnerId: 'nobody' }), { ok: false, error: 'nobody to chat with' });
+  assert.deepEqual(engine.plan({ kind: 'chat', partnerId: 'bruno' }), { ok: true });
+  assert.equal(engine.agent.walk?.to, 'park');
+  engine.advance(60);
+  const started = events.find((e) => e.body.type === 'activity_started')!.body;
+  assert.deepEqual(started.type === 'activity_started' && started.data, { kind: 'chat', place: 'park', with: 'Bruno' });
+});

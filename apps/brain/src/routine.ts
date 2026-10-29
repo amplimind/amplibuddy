@@ -11,6 +11,7 @@ import {
   type DecisionRequest,
   type Needs,
   type ThoughtSource,
+  waitedFor,
 } from '@ampli-world/shared';
 
 // The cheap half of the brain. Bodily needs and bedtime are handled by rules,
@@ -37,6 +38,7 @@ const OFFLINE_THOUGHTS: Record<ActivityKind, string[]> = {
   paint: ['I feel like making something.'],
   chat: ['I could use some company.'],
   post_note: ['Maybe someone out there wants to write to me.'],
+  visit_workshop: ["Let's see what GyrOS is up to."],
 };
 
 function pick<T>(items: T[], random: () => number): T {
@@ -53,7 +55,14 @@ function decision(kind: ActivityKind, text: string, source: ThoughtSource, bookI
  */
 export function availableActivities(
   simTime: number,
-  opts: { mailWaiting?: number; canBrowse?: boolean; canPaint?: boolean; canChat?: boolean; canPostNote?: boolean } = {},
+  opts: {
+    mailWaiting?: number;
+    canBrowse?: boolean;
+    canPaint?: boolean;
+    canChat?: boolean;
+    canPostNote?: boolean;
+    canVisitWorkshop?: boolean;
+  } = {},
 ): ActivityKind[] {
   const h = hourOf(simTime);
   const evening = h >= 20 || h < 5;
@@ -65,6 +74,7 @@ export function availableActivities(
     // Whether a neighbour is actually there right now is decided by the caller (opening hours).
     if (k === 'chat') return opts.canChat === true;
     if (k === 'post_note') return opts.canPostNote === true;
+    if (k === 'visit_workshop') return opts.canVisitWorkshop === true;
     return true;
   });
 }
@@ -78,25 +88,40 @@ export function mailOverdue(ctx: BrainContext): boolean {
   return oldestSimTime !== null && now - oldestSimTime >= MAIL_OVERDUE_MINUTES;
 }
 
+/** The GyrOS run that has waited longest past the threshold, if any. */
+export function longestOverdue(ctx: BrainContext) {
+  const overdue = ctx.snapshot.gyros?.connected ? ctx.snapshot.gyros.runs.filter((r) => r.overdue && r.waitingSince) : [];
+  return overdue.sort((a, b) => a.waitingSince!.localeCompare(b.waitingSince!))[0];
+}
+
 /**
  * Rules that override free choice. Returns null when there's a real choice to make.
  * Overdue mail only counts when Ampli can actually answer it (an LLM is available).
+ * The workshop bell is rung even without an LLM: it falls back to plain facts.
  */
 export function routineDecision(
   ctx: BrainContext,
-  opts: { canAnswerMail?: boolean } = {},
+  opts: { canAnswerMail?: boolean; canRingBell?: boolean } = {},
   random = Math.random,
 ): DecisionRequest | null {
   const { simTime, agent } = ctx.snapshot;
+  const overdue = opts.canRingBell ? longestOverdue(ctx) : undefined;
   const kind: ActivityKind | null = isNight(simTime)
     ? 'sleep'
     : agent.needs.energy < 15
       ? 'nap'
       : agent.needs.satiety < 20
         ? 'eat'
-        : opts.canAnswerMail && mailOverdue(ctx)
-          ? 'check_mail'
-          : null;
+        : overdue
+          ? 'visit_workshop'
+          : opts.canAnswerMail && mailOverdue(ctx)
+            ? 'check_mail'
+            : null;
+  if (kind === 'visit_workshop' && overdue) {
+    const who = overdue.ticketKey ?? 'A GyrOS run';
+    const text = `${who} has been waiting ${waitedFor(overdue.waitingSince!)} for ${overdue.pendingLabel ?? 'a human'}. I'll go ring the workshop bell.`;
+    return decision(kind, text, 'routine');
+  }
   return kind ? decision(kind, pick(ROUTINE_THOUGHTS[kind]!, random), 'routine') : null;
 }
 

@@ -13,7 +13,7 @@
     "dev:brain": "npm run dev --workspace=apps/brain",
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=apps/web",
-    "start": "concurrently -k -n sim,brain -c blue,magenta \"npm run start --workspace=apps/sim\" \"npm run start --workspace=apps/brain\"",
+    "start": "node --disable-warning=ExperimentalWarning --import tsx scripts/start.ts",
     "test": "node --import tsx --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "search:start": "docker run -d --name ampli-searxng --restart unless-stopped -p 127.0.0.1:8888:8080 -v \"$PWD/tools/searxng:/etc/searxng\" -e SEARXNG_SECRET=$(openssl rand -hex 16) searxng/searxng:latest && echo \"SearXNG running at http://localhost:8888 (set SEARXNG_URL=http://localhost:8888 in .env)\"",

@@ -1,4 +1,5 @@
 import {
+  ART_VERSION,
   MAIN_STREET_Y,
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -6,11 +7,17 @@ import {
   hourOf,
   neighborPresent,
   pointAlong,
+  GYROS_STATIONS,
   type ActivityKind,
+  type GyrosRun,
+  type GyrosState,
+  type GyrosStation,
+  type Neighbor,
   type PlaceDef,
   type PlaceId,
   type Point,
 } from '@ampli-world/shared';
+import { drawCritter } from './critters.ts';
 import type { Bubble, LiveSnapshot } from './useWorld.ts';
 
 // Canvas renderer for the town. The static layer (ground, roads, buildings)
@@ -59,6 +66,24 @@ const BUILDINGS: Partial<Record<PlaceDef['id'], BuildingStyle>> = {
   library: { roof: '#4a6fa5', roofDark: '#3a5885', wall: '#e8dcc8' },
   netcafe: { roof: '#3b4a6b', roofDark: '#2c3852', wall: '#e6eef5', awning: ['#7a5cc7', '#e6eef5'] },
   studio: { roof: '#d9822b', roofDark: '#b5661a', wall: '#fbf3e4', awning: ['#e0b84c', '#c8553d'] },
+  workshop: { roof: '#55606e', roofDark: '#424b57', wall: '#ece6da', awning: ['#f2a33a', '#3b3127'] },
+};
+
+/** The workshop has a glass roof: GyrOS stays visible from outside. */
+const GLASS_ROOF_ALPHA = 0.28;
+
+/** Station desks in the workshop (tile centres): along the top, then back along the bottom. */
+const STATION_POS: Record<GyrosStation, Point> = {
+  ticket: { x: 42.1, y: 15.9 },
+  questions: { x: 43.9, y: 15.9 },
+  draft: { x: 45.7, y: 15.9 },
+  setup: { x: 47.5, y: 15.9 },
+  bench: { x: 49.3, y: 15.9 },
+  gates: { x: 49.3, y: 21.1 },
+  browser: { x: 47.5, y: 21.1 },
+  review: { x: 45.7, y: 21.1 },
+  dock: { x: 43.9, y: 21.1 },
+  watch: { x: 42.1, y: 21.1 },
 };
 
 const PARK_TREES: Point[] = [
@@ -87,6 +112,7 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   paint: '🎨',
   chat: '💬',
   post_note: '📌',
+  visit_workshop: '⚙️',
 };
 
 function px(tile: number): number {
@@ -348,6 +374,32 @@ function chair(ctx: CanvasRenderingContext2D, x: number, y: number, color = '#9a
 const EASEL = { x: 15.15, y: 2.35, w: 2.0, h: 1.5 };
 
 const INTERIORS: Partial<Record<PlaceId, (ctx: CanvasRenderingContext2D, room: ReturnType<typeof roomOf>) => void>> = {
+  workshop(ctx, room) {
+    checker(ctx, room, '#d7d4cf', '#cbc8c2');
+    // A conveyor line through the middle: the run's path from ticket to pull request.
+    ctx.strokeStyle = 'rgba(59, 49, 39, 0.25)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(px(STATION_POS.ticket.x), px(17.2));
+    ctx.lineTo(px(STATION_POS.bench.x + 0.6), px(17.2));
+    ctx.lineTo(px(STATION_POS.bench.x + 0.6), px(19.9));
+    ctx.lineTo(px(STATION_POS.watch.x), px(19.9));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const s of GYROS_STATIONS) {
+      const p = STATION_POS[s.id];
+      rect(ctx, '#8c7a66', p.x - 0.6, p.y - 0.45, 1.2, 0.75, 3);
+      rect(ctx, '#b49a7e', p.x - 0.55, p.y - 0.45, 1.1, 0.25, 3);
+      ctx.font = `${px(0.42)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(s.icon, px(p.x), px(p.y - 0.05));
+      ctx.font = `600 ${px(0.27)}px ui-rounded, system-ui, sans-serif`;
+      ctx.fillStyle = C.ink;
+      ctx.fillText(s.label, px(p.x), px(p.y + (s.id === 'ticket' || s.id === 'questions' || s.id === 'draft' || s.id === 'setup' || s.id === 'bench' ? 0.55 : -0.7)));
+    }
+  },
   studio(ctx, room) {
     planks(ctx, room, '#efe2c8', '#e0cfae');
     // Paint splashes on the floor, pictures on the wall, pots and a stool.
@@ -566,11 +618,12 @@ function drawRoofsAndLabels(ctx: CanvasRenderingContext2D, reveal: Partial<Recor
   for (const place of Object.values(PLACES)) {
     const style = BUILDINGS[place.id];
     const open = reveal[place.id] ?? 0;
-    if (style) drawRoof(ctx, place, style, 1 - open);
+    const glass = place.id === 'workshop';
+    if (style) drawRoof(ctx, place, style, (1 - open) * (glass ? GLASS_ROOF_ALPHA : 1));
     const { x, y, w } = place.area;
-    const cy = style ? px(roomOf(place).y) + px(roomOf(place).h) / 2 : px(y) + 14;
+    const cy = glass ? px(y) - 12 : style ? px(roomOf(place).y) + px(roomOf(place).h) / 2 : px(y) + 14;
     ctx.save();
-    ctx.globalAlpha = 1 - open;
+    ctx.globalAlpha = glass ? 1 : 1 - open;
     drawLabel(ctx, place.name, px(x + w / 2), cy);
     ctx.restore();
   }
@@ -588,105 +641,30 @@ function darkness(simTime: number): number {
 }
 
 /** Hedda's spot behind the café counter, facing the tables (tile coordinates). */
-const HEDDA = { x: 33.5, y: 3.65 };
+/** Where neighbours stand at each place (tiles); a second one at the same place stands beside. */
+const RESIDENT_SPOTS: Record<PlaceId, Point> = {
+  home: { x: 8.2, y: 4.4 },
+  cafe: { x: 33.5, y: 3.65 }, // behind the counter
+  park: { x: 34.4, y: 16.3 },
+  library: { x: 8.2, y: 17.6 },
+  plaza: { x: 17.4, y: 14.6 },
+  netcafe: { x: 16.2, y: 20.4 },
+  studio: { x: 16.4, y: 4.4 },
+  workshop: { x: 47, y: 18.6 },
+};
 
-/** A hedgehog: spiky brown back, light face, looking down at the tables. */
-function drawHedgehog(ctx: CanvasRenderingContext2D, x: number, y: number, bob: number) {
-  ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.fillStyle = '#5a3e2b';
-  for (let i = 0; i < 9; i++) {
-    const a = Math.PI + (i / 8) * Math.PI;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a - 0.2) * 8, Math.sin(a - 0.2) * 7 - 1);
-    ctx.lineTo(Math.cos(a) * 13, Math.sin(a) * 11 - 1);
-    ctx.lineTo(Math.cos(a + 0.2) * 8, Math.sin(a + 0.2) * 7 - 1);
-    ctx.fill();
+/** Map pixel position of each neighbour who's in town right now. */
+function residentPositions(neighbors: Neighbor[], simTime: number): Map<string, Point> {
+  const perPlace = new Map<PlaceId, number>();
+  const positions = new Map<string, Point>();
+  for (const n of neighbors) {
+    if (!neighborPresent(n, simTime)) continue;
+    const i = perPlace.get(n.place) ?? 0;
+    perPlace.set(n.place, i + 1);
+    const spot = RESIDENT_SPOTS[n.place];
+    positions.set(n.id, { x: px(spot.x + i * 1.2), y: px(spot.y) });
   }
-  ctx.fillStyle = '#7a5235';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#e8cfa8';
-  ctx.beginPath();
-  ctx.ellipse(0, 3, 6.5, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = C.ink;
-  for (const ex of [-2.5, 2.5]) {
-    ctx.beginPath();
-    ctx.arc(ex, 1.5, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.arc(0, 5.5, 1.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawFox(ctx: CanvasRenderingContext2D, x: number, y: number, facing: number, sleeping: boolean, bob: number) {
-  ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.scale(facing, 1);
-
-  ctx.fillStyle = C.shadow;
-  ctx.beginPath();
-  ctx.ellipse(0, 10 - bob, 11, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Tail
-  ctx.fillStyle = C.fox;
-  ctx.beginPath();
-  ctx.ellipse(-11, 3, 8, 5, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = C.cream;
-  ctx.beginPath();
-  ctx.arc(-17, 0, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Body + head
-  ctx.fillStyle = C.fox;
-  ctx.beginPath();
-  ctx.arc(0, 0, 10, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Ears
-  ctx.fillStyle = C.foxDark;
-  for (const ex of [-6, 5]) {
-    ctx.beginPath();
-    ctx.moveTo(ex - 4, -6);
-    ctx.lineTo(ex, -15);
-    ctx.lineTo(ex + 4, -6);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Muzzle
-  ctx.fillStyle = C.cream;
-  ctx.beginPath();
-  ctx.ellipse(4, 3, 6, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = C.ink;
-  ctx.beginPath();
-  ctx.arc(9, 2, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Eyes
-  ctx.strokeStyle = C.ink;
-  ctx.fillStyle = C.ink;
-  ctx.lineWidth = 1.5;
-  for (const ex of [-2, 5]) {
-    if (sleeping) {
-      ctx.beginPath();
-      ctx.moveTo(ex - 2, -3);
-      ctx.lineTo(ex + 2, -3);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(ex, -3, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
+  return positions;
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
@@ -784,7 +762,7 @@ function drawEasel(ctx: CanvasRenderingContext2D, state: FrameState, latestArtId
   if (latestArtId === null) return;
   if (state.easel?.id !== latestArtId) {
     const img = new Image();
-    img.src = `/api/art/${latestArtId}.svg`;
+    img.src = `/api/art/${latestArtId}.svg?v=${ART_VERSION}`;
     state.easel = { id: latestArtId, img };
   }
   const { img } = state.easel;
@@ -802,6 +780,162 @@ function updateReveal(state: FrameState, fox: Point, now: number) {
   }
 }
 
+/** Map pixels to CSS pixels: x * scale + tx. */
+export interface View {
+  scale: number;
+  tx: number;
+  ty: number;
+}
+
+/** Ampli's current position in tiles, interpolated along a walk. */
+export function foxTile(live: LiveSnapshot, now: number): Point {
+  const { snapshot, receivedAt } = live;
+  const { agent } = snapshot;
+  if (!agent.walk) return agent.position;
+  const simNow = snapshot.simTime + ((now - receivedAt) / 1000) * snapshot.minutesPerSecond;
+  return pointAlong(agent.walk.path, (simNow - agent.walk.startedAt) / (agent.walk.endsAt - agent.walk.startedAt));
+}
+
+/** One small robot per active GyrOS run, at its station; orange with "!" when it waits for a human. */
+interface RobotHit {
+  run: GyrosRun;
+  x: number;
+  y: number;
+}
+
+const ROBOTS_PER_ROW = 3;
+const MAX_ROBOTS = 6;
+
+/** One little robot per run, in rows of three at its station, facing the aisle. Returns the one under the mouse. */
+function drawWorkshopRuns(
+  ctx: CanvasRenderingContext2D,
+  gyros: GyrosState | null,
+  now: number,
+  mouse: Point | null,
+): RobotHit | null {
+  const area = PLACES.workshop.area;
+  if (!gyros || !gyros.connected) {
+    drawLabel(ctx, gyros ? 'GyrOS offline' : 'closed', px(area.x + area.w / 2), px(area.y + area.h / 2));
+    return null;
+  }
+  const byStation = new Map<GyrosStation, GyrosRun[]>();
+  for (const run of gyros.runs) byStation.set(run.station, [...(byStation.get(run.station) ?? []), run]);
+  let hit: RobotHit | null = null;
+  for (const [station, runs] of byStation) {
+    const base = STATION_POS[station];
+    const top = base.y < 18;
+    const shown = runs.slice(0, MAX_ROBOTS);
+    shown.forEach((run, i) => {
+      const row = Math.floor(i / ROBOTS_PER_ROW);
+      const inRow = Math.min(ROBOTS_PER_ROW, shown.length - row * ROBOTS_PER_ROW);
+      const col = i % ROBOTS_PER_ROW;
+      const x = px(base.x + (col - (inRow - 1) / 2) * 0.55);
+      const rowY = top ? base.y + 1.05 + row * 0.6 : base.y - 1.25 - row * 0.6;
+      const y = px(rowY) + (run.busy ? Math.sin(now / 160 + i) * 1.2 : 0);
+      drawRobot(ctx, run, x, y);
+      if (mouse && Math.abs(mouse.x * TILE - x) < 8 && Math.abs(mouse.y * TILE - y) < 9) hit = { run, x, y };
+    });
+    drawStationBadge(ctx, base, runs);
+  }
+  return hit;
+}
+
+/** How many runs sit at a station, on the desk's corner; orange if any waits for a human. */
+function drawStationBadge(ctx: CanvasRenderingContext2D, base: Point, runs: GyrosRun[]) {
+  const x = px(base.x + 0.62);
+  const y = px(base.y - 0.42);
+  ctx.fillStyle = runs.some((r) => r.pending) ? '#e07a3a' : '#5b6670';
+  ctx.beginPath();
+  ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 8px ui-rounded, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(runs.length), x, y + 0.5);
+}
+
+function drawRobot(ctx: CanvasRenderingContext2D, run: GyrosRun, x: number, y: number) {
+  const color = run.pending ? '#f2a33a' : run.status === 'watching' ? '#5e9748' : run.busy ? '#4a6fa5' : '#9aa3ad';
+  ctx.fillStyle = C.shadow;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 7, 6, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  roundRect(ctx, x - 6, y - 6, 12, 11, 3);
+  ctx.fill();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 6);
+  ctx.lineTo(x, y - 9);
+  ctx.stroke();
+  ctx.fillStyle = run.busy ? '#ffd77a' : C.ink;
+  ctx.beginPath();
+  ctx.arc(x, y - 10, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x - 3.5, y - 3, 2.5, 2.5);
+  ctx.fillRect(x + 1, y - 3, 2.5, 2.5);
+  if (run.pending) {
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillStyle = '#b3261e';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', x + 8, y - 8);
+  }
+}
+
+/** Ticket, workflow, step and title of the robot under the mouse, in screen pixels above everything else. */
+function drawRobotTooltip(ctx: CanvasRenderingContext2D, run: GyrosRun, x: number, y: number, viewWidth: number) {
+  const name = run.ticketKey ? (run.workflow === 'carplan' ? run.ticketKey : `${run.ticketKey} · ${run.workflow}`) : run.workflow;
+  const step = run.pendingLabel ? `Waiting for: ${run.pendingLabel}` : run.stepLabel;
+  const title = run.title && run.title.length > 52 ? `${run.title.slice(0, 51)}…` : run.title;
+  const lines = [name, step, ...(title ? [title] : [])];
+  const font = (weight: number) => `${weight} 12px ui-rounded, system-ui, sans-serif`;
+  let w = 0;
+  lines.forEach((line, i) => {
+    ctx.font = font(i === 0 ? 700 : 500);
+    w = Math.max(w, ctx.measureText(line).width + 20);
+  });
+  const h = lines.length * 16 + 12;
+  const left = Math.min(Math.max(x - w / 2, 6), viewWidth - w - 6);
+  const top = y - 18 - h < 6 ? y + 18 : y - 18 - h;
+  ctx.fillStyle = 'rgba(255, 252, 245, 0.97)';
+  ctx.strokeStyle = run.pending ? '#f2a33a' : '#d8ccb8';
+  ctx.lineWidth = 1;
+  roundRect(ctx, left, top, w, h, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  lines.forEach((line, i) => {
+    ctx.font = font(i === 0 ? 700 : 500);
+    ctx.fillStyle = i === 0 ? C.ink : '#6b5d4f';
+    ctx.fillText(line, left + 10, top + 7 + i * 16);
+  });
+  ctx.textBaseline = 'middle';
+}
+
+/** A bell over the workshop roof while GyrOS waits for a human. */
+function drawWorkshopBell(ctx: CanvasRenderingContext2D, gyros: GyrosState | null, now: number) {
+  const waiting = gyros?.runs.filter((r) => r.pending).length ?? 0;
+  if (waiting === 0) return;
+  const { x, y, w } = PLACES.workshop.area;
+  ctx.font = '18px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.translate(px(x + w / 2) + 52, px(y) - 14);
+  ctx.rotate(Math.sin(now / 180) * 0.25);
+  ctx.fillText('🔔', 0, 0);
+  ctx.restore();
+  if (waiting > 1) drawLabel(ctx, String(waiting), px(x + w / 2) + 68, px(y) - 20);
+}
+
 export function drawFrame(
   ctx: CanvasRenderingContext2D,
   staticLayer: HTMLCanvasElement,
@@ -809,8 +943,14 @@ export function drawFrame(
   bubble: Bubble | null,
   now: number,
   state: FrameState,
+  view: View,
+  dpr: number,
 ) {
-  ctx.drawImage(staticLayer, 0, 0, WIDTH, HEIGHT);
+  // The static layer is already rendered for this view, pixel for pixel.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(staticLayer, 0, 0);
+  ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.tx, dpr * view.ty);
   if (!live) {
     drawRoofsAndLabels(ctx, state.reveal);
     return;
@@ -832,15 +972,20 @@ export function drawFrame(
 
   updateReveal(state, { x: pos.x + 0.5, y: pos.y + 0.5 }, now);
   drawEasel(ctx, state, snapshot.latestArtId);
+  const robot = drawWorkshopRuns(ctx, snapshot.gyros, now, state.mouse);
   // Neighbours stand at their place during opening hours (under the roof, so visible when you look inside).
-  const heddaHere = snapshot.neighbors.some((n) => n.place === 'cafe' && neighborPresent(n, simNow));
-  if (heddaHere) drawHedgehog(ctx, px(HEDDA.x), px(HEDDA.y), Math.sin(now / 700) * 0.6);
+  const residents = residentPositions(snapshot.neighbors, simNow);
+  snapshot.neighbors.forEach((n, i) => {
+    const at = residents.get(n.id);
+    if (at) drawCritter(ctx, n.look, at.x, at.y, { facing: -1, bob: Math.sin(now / 700 + i) * 0.6 });
+  });
   drawRoofsAndLabels(ctx, state.reveal);
+  drawWorkshopBell(ctx, snapshot.gyros, now);
 
   const kind = agent.activity?.kind;
   const sleeping = kind === 'sleep' || kind === 'nap';
   const bob = agent.walk ? Math.abs(Math.sin(now / 110)) * -3 : sleeping ? Math.sin(now / 900) * 0.8 : 0;
-  drawFox(ctx, x, y, state.facing, sleeping, bob);
+  drawCritter(ctx, snapshot.persona.look, x, y, { facing: state.facing, sleeping, bob });
 
   const dark = darkness(simNow);
   if (dark > 0) {
@@ -889,8 +1034,14 @@ export function drawFrame(
     const age = now - bubble.receivedAt;
     if (age < BUBBLE_MS) {
       const alpha = Math.min(1, age / 300, (BUBBLE_MS - age) / 800);
-      const atNeighbor = bubble.speaker && bubble.speaker !== 'ampli';
-      drawBubble(ctx, bubble.text, atNeighbor ? px(HEDDA.x) : x, atNeighbor ? px(HEDDA.y) : y, alpha);
+      const at = bubble.speaker && bubble.speaker !== 'ampli' ? residents.get(bubble.speaker) : undefined;
+      drawBubble(ctx, bubble.text, at?.x ?? x, at?.y ?? y, alpha);
     }
+  }
+
+  // The robot tooltip is drawn in screen pixels, so it stays readable at any zoom.
+  if (robot) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawRobotTooltip(ctx, robot.run, robot.x * view.scale + view.tx, robot.y * view.scale + view.ty, ctx.canvas.width / dpr);
   }
 }

@@ -14,7 +14,7 @@ const TOKEN = 'brain-secret';
 const ADMIN = 'admin-secret';
 
 function setup(extra: Partial<AppOptions> = {}) {
-  const sim = new Sim(new Store(':memory:'), new Map(), { name: 'Ampli', species: 'fox', town: 'X' }, 1);
+  const sim = new Sim(new Store(':memory:'), new Map(), { name: 'Ampli', species: 'fox', look: 'fox', town: 'X' }, 1);
   const app = createApp(sim, { brainToken: TOKEN, webDist: '/nonexistent', adminToken: ADMIN, ...extra });
 
   const send = (body: unknown, cookie?: string) =>
@@ -444,8 +444,8 @@ test('held artworks stay hidden until an admin approves them', async () => {
 // --- Neighbours -----------------------------------------------------------------------------
 
 test('chat lines resolve speaker names; neighbour notes are stored per neighbour', async () => {
-  const sim = new Sim(new Store(':memory:'), new Map(), { name: 'Ampli', species: 'fox', town: 'X' }, 1, [
-    { id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe' },
+  const sim = new Sim(new Store(':memory:'), new Map(), { name: 'Ampli', species: 'fox', look: 'fox', town: 'X' }, 1, [
+    { id: 'hedda', name: 'Hedda', species: 'hedgehog', look: 'hedgehog', place: 'cafe' },
   ]);
   const app = createApp(sim, { brainToken: TOKEN, webDist: '/nonexistent' });
   const brain = (path: string, body?: unknown) =>
@@ -490,6 +490,15 @@ test('notes: pinned ones are public, held ones never appear', async () => {
   t.sim.engine.advance(24 * 60);
   const next = (await (await t.brain('/api/brain/context')).json()) as { notesToday: number };
   assert.equal(next.notesToday, 0);
+});
+
+test('notes: a note that never got written is logged as failed, not pinned', async () => {
+  const t = setup();
+  const res = await t.brain('/api/brain/note', { failed: true });
+  assert.deepEqual(await res.json(), { ok: true, pinned: false });
+  assert.deepEqual(await t.get<WorldEvent[]>('/api/notes'), [], 'nothing reaches the board');
+  const failed = (await t.get<WorldEvent[]>('/api/events')).filter((e) => e.type === 'note_posted');
+  assert.deepEqual(failed.map((e) => e.data), [{ failed: true }]);
 });
 
 // --- Ampli asks ------------------------------------------------------------------------------

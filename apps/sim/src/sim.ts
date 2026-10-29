@@ -1,5 +1,6 @@
 import type { BookWithText, EventBody, Neighbor, Persona, WorldEvent, WorldSnapshot } from '@ampli-world/shared';
 import { Engine, initialState } from './engine.ts';
+import type { GyrosBridge } from './gyros.ts';
 import type { Store } from './store.ts';
 
 export interface SseMessage {
@@ -28,6 +29,8 @@ export class Hub {
 export class Sim {
   readonly hub = new Hub();
   readonly engine: Engine;
+  /** Set by main when GYROS_URL is configured. */
+  gyros: GyrosBridge | null = null;
 
   constructor(
     readonly store: Store,
@@ -41,6 +44,8 @@ export class Sim {
       (body, simTime) => this.record(body, simTime),
       (id) => books.get(id)?.title,
       minutesPerSecond,
+      // Without a partner, the first neighbour (older brains only knew one).
+      (partnerId) => neighbors.find((n) => n.id === partnerId) ?? (partnerId ? undefined : neighbors[0]),
     );
   }
 
@@ -54,6 +59,7 @@ export class Sim {
       mailWaiting: this.store.mailStats().waiting,
       latestArtId: this.store.latestArtId(),
       openQuestion: this.store.openQuestion(),
+      gyros: this.gyros?.state() ?? null,
     };
   }
 

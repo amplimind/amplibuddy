@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   MAX_QUERY_CHARS,
+  PLACES,
   dayOf,
   formatHours,
   neighborPresent,
@@ -15,6 +16,7 @@ import {
   type DiaryRequest,
   type LlmMeta,
   type MailReplyRequest,
+  type PlaceId,
   type Verdict,
   type WorldEvent,
 } from '@ampli-world/shared';
@@ -59,6 +61,14 @@ import {
   replyUser,
   sayTool,
   takeawayTool,
+  bellFallback,
+  bellSystem,
+  bellTool,
+  bellUser,
+  presentNeighbors,
+  workshopSystem,
+  workshopTool,
+  workshopUser,
   type ChatTurn,
   type ModerationTarget,
 } from './prompts.ts';
@@ -94,6 +104,13 @@ export function toDecision(
     const query = typeof args.search === 'string' ? args.search.trim().slice(0, MAX_QUERY_CHARS) : '';
     if (!query) throw new Error('browse chosen without a search query');
     return { plan: { kind, query }, thought };
+  }
+  if (kind === 'chat') {
+    const present = presentNeighbors(ctx);
+    const wanted = typeof args.with === 'string' ? args.with.trim().toLowerCase() : '';
+    const partner = present.find((n) => n.name.toLowerCase() === wanted) ?? present[0];
+    if (!partner) throw new Error('chat chosen but nobody is around');
+    return { plan: { kind, partnerId: partner.id }, thought };
   }
   return { plan: { kind }, thought };
 }
@@ -132,14 +149,30 @@ const MAX_TAKEAWAY_CHARS = 580;
 const MIN_CHAT_LINES = 4;
 const MAX_CHAT_LINES = 6;
 
+/** Where the sim clock is now, estimated from the context's snapshot and the real time since. */
+function simNowSince(ctx: BrainContext, startedRealMs: number): number {
+  return ctx.snapshot.simTime + ((Date.now() - startedRealMs) / 1000) * ctx.snapshot.minutesPerSecond;
+}
+
+/**
+ * Has the chat activity ended? Lines that a slow model finishes after that are dropped:
+ * otherwise the feed shows Ampli chatting at the counter while it's already at the pond.
+ */
+export function chatOver(ctx: BrainContext, startedRealMs: number, endsAt: number): boolean {
+  return simNowSince(ctx, startedRealMs) >= endsAt;
+}
+
 /** Real milliseconds to wait between chat lines: spread over the rest of the activity, 0.8-5 s. */
 export function chatPause(ctx: BrainContext, startedRealMs: number, endsAt: number, linesLeft: number): number {
   const mps = ctx.snapshot.minutesPerSecond;
-  const simNow = ctx.snapshot.simTime + ((Date.now() - startedRealMs) / 1000) * mps;
+  const simNow = simNowSince(ctx, startedRealMs);
   const remainingSeconds = Math.max(0, (endsAt - simNow) / mps);
   const seconds = remainingSeconds / (linesLeft + 1);
   return Math.round(Math.min(5, Math.max(0.8, seconds)) * 1000);
 }
+
+/** After a bell attempt, wait this long (real time) before the bell rule may fire again. */
+const BELL_RETRY_MS = 10 * 60_000;
 
 /** No credits, bad key, forbidden: retrying soon won't help. */
 export function isAccountError(err: unknown): boolean {
@@ -169,6 +202,11 @@ export class Mind {
   private paintFor: number | null = null;
   private chatFor: number | null = null;
   private noteFor: number | null = null;
+  private workshopFor: number | null = null;
+  /** Who the character is, for the content checks ("Ampli, an AI small fox character"). */
+  private character = 'Ampli, an AI fox character';
+  /** Real time of the last bell attempt, so a failed one doesn't send Ampli back right away. */
+  private bellTriedAt = 0;
   /** Cost of the query check, reported together with the search it belongs to. */
   private pendingBrowseMeta: LlmMeta[] = [];
   /** Search providers that failed recently, until when to skip them. */
@@ -187,6 +225,8 @@ export class Mind {
 
   /** Called on every poll. Starts background work (reading, diary, mail) and decides when idle. */
   async step(ctx: BrainContext): Promise<void> {
+    const p = ctx.snapshot.persona;
+    this.character = `${p.name}, an AI ${p.species} character`;
     this.observe(ctx);
     void this.moderateQueue(ctx);
     if (ctx.idle && !this.deciding) await this.decide(ctx);
@@ -208,6 +248,15 @@ export class Mind {
       if (!done) void this.browse(ctx, activity.query);
     }
 
+    if (activity.kind === 'visit_workshop' && this.workshopFor !== activity.startedAt) {
+      this.workshopFor = activity.startedAt;
+      const done = ctx.recentEvents.some(
+        (e) => (e.type === 'workshop_note' || e.type === 'gyros_nudge') && e.simTime >= activity.startedAt,
+      );
+      const overdue = ctx.snapshot.gyros?.runs.some((r) => r.overdue) ?? false;
+      if (!done) void (overdue ? this.ringBell(ctx) : this.explainWorkshop(ctx));
+    }
+
     if (activity.kind === 'post_note' && this.noteFor !== activity.startedAt) {
       this.noteFor = activity.startedAt;
       const done = ctx.recentEvents.some((e) => e.type === 'note_posted' && e.simTime >= activity.startedAt);
@@ -217,7 +266,7 @@ export class Mind {
     if (activity.kind === 'chat' && this.chatFor !== activity.startedAt) {
       this.chatFor = activity.startedAt;
       const done = ctx.recentEvents.some((e) => e.type === 'chat_line' && e.simTime >= activity.startedAt);
-      if (!done) void this.chat(ctx, activity.startedAt, activity.endsAt);
+      if (!done) void this.chat(ctx, activity.startedAt, activity.endsAt, activity.partnerId, activity.place);
     }
 
     if (activity.kind === 'paint' && this.paintFor !== activity.startedAt) {
@@ -244,7 +293,10 @@ export class Mind {
     this.deciding = true;
     try {
       const decision =
-        routineDecision(ctx, { canAnswerMail: this.llmAvailable(ctx) && !this.answering }) ??
+        routineDecision(ctx, {
+          canAnswerMail: this.llmAvailable(ctx) && !this.answering,
+          canRingBell: Date.now() - this.bellTriedAt > BELL_RETRY_MS,
+        }) ??
         (await this.freeChoice(ctx));
       await this.sim.decide(decision);
       const { plan, thought } = decision;
@@ -263,26 +315,29 @@ export class Mind {
     await this.sim.thinking().catch(() => {});
     const canBrowse = this.cfg.webSearch && ctx.browsesToday < this.cfg.searchesPerDay;
     const canPaint = ctx.artToday < this.cfg.artPerDay;
-    const canChat =
-      ctx.chatsToday < this.cfg.chatsPerDay &&
-      this.neighbors.some((n) => n.place === 'cafe' && neighborPresent(n, ctx.snapshot.simTime));
+    const present = presentNeighbors(ctx).filter((n) => this.neighbors.some((p) => p.id === n.id));
+    const canChat = ctx.chatsToday < this.cfg.chatsPerDay && present.length > 0;
     const canPostNote = ctx.notesToday < this.cfg.notesPerDay;
+    const canVisitWorkshop = ctx.snapshot.gyros?.connected === true;
     const kinds = availableActivities(ctx.snapshot.simTime, {
       mailWaiting: this.answering ? 0 : ctx.mail.waiting,
       canBrowse,
       canPaint,
       canChat,
       canPostNote,
+      canVisitWorkshop,
     });
     // Say why something is missing, so Ampli can let go of a plan instead of circling it.
     const unavailable: string[] = [];
     if (!canPostNote) unavailable.push(`post_note: you've pinned ${ctx.notesToday} notes today, the board is full until tomorrow`);
-    const cafeNeighbor = this.neighbors.find((n) => n.place === 'cafe');
-    if (cafeNeighbor && !canChat) {
+    if (this.neighbors.length > 0 && !canChat) {
+      const away = ctx.snapshot.neighbors
+        .filter((n) => n.hours)
+        .map((n) => `${n.name} is at ${PLACES[n.place].name} ${formatHours(n.hours!)}`);
       unavailable.push(
-        cafeNeighbor.hours && !neighborPresent(cafeNeighbor, ctx.snapshot.simTime)
-          ? `chat: ${cafeNeighbor.name} is only at the café ${formatHours(cafeNeighbor.hours)}`
-          : `chat: you've chatted enough with ${cafeNeighbor.name} for today`,
+        present.length === 0
+          ? `chat: nobody is around right now${away.length > 0 ? ` (${away.join('; ')})` : ''}`
+          : "chat: you've chatted enough for today",
       );
     }
     if (this.cfg.webSearch && !canBrowse) unavailable.push('browse: no more web searches today');
@@ -292,7 +347,11 @@ export class Mind {
         model: this.cfg.brainModel,
         system: decideSystem(this.persona),
         user: decideUser(ctx, kinds, unavailable),
-        tool: decideTool(kinds, ctx.books.map((b) => b.id)),
+        tool: decideTool(
+          kinds,
+          ctx.books.map((b) => b.id),
+          present.map((n) => n.name),
+        ),
         maxTokens: 300,
       });
       const decision = toDecision(args, meta, ctx, kinds);
@@ -364,9 +423,16 @@ export class Mind {
    * speaker's persona and memory: two separate minds, not one model playing both.
    * Lines are paced over the activity so the speech bubbles can be read.
    */
-  private async chat(ctx: BrainContext, startedAt: number, endsAt: number): Promise<void> {
-    const neighbor = this.neighbors.find((n) => n.place === 'cafe');
+  private async chat(
+    ctx: BrainContext,
+    startedAt: number,
+    endsAt: number,
+    partnerId: string | undefined,
+    place: PlaceId,
+  ): Promise<void> {
+    const neighbor = this.neighbors.find((n) => n.id === partnerId) ?? this.neighbors.find((n) => n.place === place);
     if (!neighbor || !this.llmAvailable(ctx)) return;
+    const where = PLACES[place].name;
     const chatId = Math.round(startedAt * 1000);
     const ampli = ctx.snapshot.persona.name;
     const notes = ctx.neighborNotes[neighbor.id] ?? [];
@@ -378,10 +444,14 @@ export class Mind {
         const isAmpli = i % 2 === 0;
         const { args, meta } = await this.llm({
           model: this.cfg.brainModel,
-          system: chatSystem(isAmpli ? this.persona : neighbor.prompt, isAmpli ? `${neighbor.name} the ${neighbor.species}` : ampli),
+          system: chatSystem(
+            isAmpli ? this.persona : neighbor.prompt,
+            isAmpli ? `${neighbor.name} the ${neighbor.species}` : ampli,
+            where,
+          ),
           user: isAmpli
-            ? ampliChatUser(ctx, neighbor.name, transcript)
-            : neighborChatUser(ctx, ampli, notes, transcript),
+            ? ampliChatUser(ctx, neighbor.name, transcript, where)
+            : neighborChatUser(ctx, ampli, notes, transcript, where),
           tool: sayTool,
           maxTokens: 200,
           temperature: 0.9,
@@ -389,6 +459,7 @@ export class Mind {
         const text = typeof args.line === 'string' ? args.line.trim() : '';
         if (!text) break;
         spent += meta.costUsd;
+        if (chatOver(ctx, t0, endsAt)) break;
         transcript.push({ name: isAmpli ? ampli : neighbor.name, text });
         await this.sim.chatLine({ chatId, speaker: isAmpli ? 'ampli' : neighbor.id, text, llm: meta });
         if (args.end === true && transcript.length >= MIN_CHAT_LINES) break;
@@ -413,20 +484,95 @@ export class Mind {
     }
   }
 
-  /** At the notice board: a short public note to colleagues, checked before it's pinned. */
-  private async postNote(ctx: BrainContext): Promise<void> {
-    if (!this.llmAvailable(ctx)) return;
+  /** At the workshop: explain in plain words what GyrOS is doing (only whitelisted facts). */
+  private async explainWorkshop(ctx: BrainContext): Promise<void> {
+    if (!this.llmAvailable(ctx) || !ctx.snapshot.gyros) return;
     try {
       const { args, meta } = await this.llm({
         model: this.cfg.brainModel,
-        system: noteSystem(this.persona),
-        user: noteUser(ctx),
-        tool: noteTool,
-        maxTokens: 250,
-        temperature: 0.9,
+        system: workshopSystem(this.persona),
+        user: workshopUser(ctx),
+        tool: workshopTool,
+        maxTokens: 350,
+        temperature: 0.8,
       });
-      const text = typeof args.text === 'string' ? args.text.trim().slice(0, MAX_NOTE_CHARS) : '';
-      if (!text) throw new Error('the note came back empty');
+      const text = typeof args.text === 'string' ? args.text.trim() : '';
+      if (!text) throw new Error('the explanation came back empty');
+      await this.sim.workshopNote({ text, llm: meta });
+      console.log(`[brain] workshop: "${text}" (${cost(meta)})`);
+    } catch (err) {
+      console.warn('[brain] workshop note failed:', (err as Error).message);
+    }
+  }
+
+  /**
+   * At the workshop with runs that have waited too long: ring the bell. The model words it
+   * (checked like a notice-board note); without a model, or if that fails, plain facts do.
+   */
+  private async ringBell(ctx: BrainContext): Promise<void> {
+    this.bellTriedAt = Date.now();
+    const runs = (ctx.snapshot.gyros?.runs ?? []).filter((r) => r.overdue).slice(0, 8);
+    if (runs.length === 0) return;
+    let text = bellFallback(runs);
+    const llm: LlmMeta[] = [];
+    if (this.llmAvailable(ctx)) {
+      try {
+        const { args, meta } = await this.llm({
+          model: this.cfg.brainModel,
+          system: bellSystem(this.persona),
+          user: bellUser(ctx, runs),
+          tool: bellTool,
+          maxTokens: 300,
+          temperature: 0.8,
+        });
+        llm.push(meta);
+        const said = typeof args.text === 'string' ? clipToSentence(args.text.trim(), MAX_NOTE_CHARS) : '';
+        if (said) {
+          const check = await this.moderate('board', said);
+          llm.push(check.meta);
+          if (check.verdict !== 'hold') text = said;
+        }
+      } catch (err) {
+        console.warn('[brain] bell wording failed, ringing with plain facts:', (err as Error).message);
+      }
+    }
+    try {
+      await this.sim.gyrosNudge({ runIds: runs.map((r) => r.runId), text, llm });
+      console.log(`[brain] rang the workshop bell: "${text}"`);
+    } catch (err) {
+      // 409: someone answered meanwhile, or the bell was already rung for this wait.
+      if (!(err instanceof SimError && err.status === 409)) console.warn('[brain] bell failed:', (err as Error).message);
+    }
+  }
+
+  /**
+   * At the notice board: a short public note to colleagues, checked before it's pinned. Two
+   * tries; if both fail the sim logs that no note was written, so Ampli doesn't believe it was.
+   */
+  private async postNote(ctx: BrainContext): Promise<void> {
+    if (!this.llmAvailable(ctx)) return;
+    try {
+      const write = () =>
+        this.llm({
+          model: this.cfg.brainModel,
+          system: noteSystem(this.persona),
+          user: noteUser(ctx),
+          tool: noteTool,
+          maxTokens: 400,
+          temperature: 0.9,
+        }).then(({ args, meta }) => {
+          const text = typeof args.text === 'string' ? clipToSentence(args.text.trim(), MAX_NOTE_CHARS) : '';
+          if (!text) throw new Error('the note came back empty');
+          return { args, meta, text };
+        });
+      let written: Awaited<ReturnType<typeof write>>;
+      try {
+        written = await write();
+      } catch (err) {
+        console.warn('[brain] note failed, trying once more:', (err as Error).message);
+        written = await write();
+      }
+      const { args, meta, text } = written;
       const check = await this.moderate('board', text);
       const held = check.verdict === 'hold';
       const question = args.question === true;
@@ -435,6 +581,7 @@ export class Mind {
       console.log(`[brain] ${what} ${held ? `held (${check.reason})` : `pinned: "${text}"`} (${cost(meta)})`);
     } catch (err) {
       console.warn('[brain] note failed:', (err as Error).message);
+      await this.sim.note({ failed: true }).catch(() => {});
     }
   }
 
@@ -516,7 +663,7 @@ export class Mind {
   private async moderate(target: ModerationTarget, text: string, image?: string) {
     const { args, meta } = await this.llm({
       model: this.cfg.brainModel,
-      system: moderationSystem(target),
+      system: moderationSystem(target, this.character),
       user: moderationUser(text || '(no text, only a drawing)'),
       tool: moderationTool,
       maxTokens: 150,

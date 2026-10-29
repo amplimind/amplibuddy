@@ -12,6 +12,7 @@ import {
   formatHours,
   formatTime,
   hourOf,
+  waitedFor,
   neighborPresent,
   parseFrontmatter,
   type ActivityKind,
@@ -19,7 +20,10 @@ import {
   type BrainContext,
   type BrainLetter,
   type DiaryEntry,
+  type EventBody,
   type EventType,
+  type GyrosRun,
+  type GyrosState,
   type Neighbor,
   type WorldEvent,
 } from '@ampli-world/shared';
@@ -34,6 +38,7 @@ const GROUND_RULES = `
 - Only the places and neighbours named here exist. There are no strangers, customers or passers-by in town.
 - If you don't know something, say so. Being unsure is fine.
 - Write in English, first person, plain words. No emojis, no hashtags.
+- Say things plainly and concretely, the way you'd talk to a colleague. No strings of metaphors, no riddles, no private in-jokes that someone just tuning in couldn't follow.
 `.trim();
 
 /**
@@ -48,6 +53,23 @@ export function buildPersonaPrompt(fileText: string): string {
     meta.town && `- You live in ${meta.town}, a tiny town (the places are listed in your observations).`,
   ].filter(Boolean);
   return config.length > 0 ? `${body}\n\n## Your world configuration\n${config.join('\n')}` : body;
+}
+
+/**
+ * A neighbour's persona plus who and where they are, so personality templates can stay
+ * free of names and places.
+ */
+export function buildNeighborPrompt(
+  body: string,
+  who: { name: string; species: string; place: string; town: string; hours?: { from: number; to: number } },
+): string {
+  const when = who.hours ? `, ${formatHours(who.hours)}` : '';
+  return `${body.trim()}
+
+## Who and where you are
+- Name: ${who.name}
+- Species: ${who.species}
+- You live in ${who.town}, a tiny town. You're usually at ${who.place}${when}.`;
 }
 
 function partOfDay(simTime: number): string {
@@ -71,6 +93,7 @@ export function describeEvent(e: WorldEvent): string | null {
     case 'activity_started':
       if (e.data.bookTitle) return `${at} You started reading "${e.data.bookTitle}".`;
       if (e.data.query) return `${at} You went online to look up "${e.data.query}".`;
+      if (e.data.with) return `${at} You started chatting with ${e.data.with} at ${PLACES[e.data.place].name}.`;
       return `${at} You started ${ACTIVITIES[e.data.kind].verb}.`;
     case 'activity_finished':
       return null;
@@ -94,8 +117,15 @@ export function describeEvent(e: WorldEvent): string | null {
         ? `${at} You read a letter from ${e.data.from}${drawing}${said} You replied: "${e.data.reply}"`
         : `${at} You read a letter from ${e.data.from}${drawing}${said} You didn't reply.`;
     }
+    case 'gyros':
+      return `${at} ${gyrosEventLine(e.data)}`;
+    case 'workshop_note':
+      return `${at} At the workshop you explained: "${e.data.text}"`;
+    case 'gyros_nudge':
+      return `${at} You rang the workshop bell for the people who watch you: "${e.data.text}"`;
     case 'note_posted':
       if (e.data.held) return `${at} You wrote a note, but it didn't pass the content check, so it's not on the notice board.`;
+      if (e.data.failed) return `${at} You went to the notice board, but the note never got written (something went wrong), so nothing new is on the board.`;
       return e.data.question
         ? `${at} You asked the people who watch you: "${e.data.text}"`
         : `${at} You pinned a note on the notice board: "${e.data.text}"`;
@@ -118,6 +148,7 @@ const OPTION_ORDER: ActivityKind[] = [
   'think',
   'paint',
   'post_note',
+  'visit_workshop',
   'check_mail',
   'chat',
   'stroll',
@@ -175,6 +206,53 @@ export function lastThoughtsBlock(ctx: BrainContext, count = 3): string {
     : '';
 }
 
+function ticketName(key: string | null, title: string | null): string {
+  return key ? (title ? `${key} ("${title}")` : key) : title ? `"${title}"` : 'a ticket';
+}
+
+/** One plain sentence per GyrOS event, from Ampli's point of view. */
+export function gyrosEventLine(d: Extract<EventBody, { type: 'gyros' }>['data']): string {
+  const t = ticketName(d.ticketKey, d.title);
+  switch (d.kind) {
+    case 'started':
+      return `GyrOS started working on ${t}.`;
+    case 'step':
+      return `GyrOS moved on with ${t}: ${d.stepLabel}${d.round > 1 ? ` (round ${d.round})` : ''}.`;
+    case 'needs_you':
+      return `GyrOS is waiting for a human on ${t}: it needs ${d.pendingLabel ?? 'a decision'}.`;
+    case 'resumed':
+      return `A human answered GyrOS on ${t}; it's working again.`;
+    case 'published':
+      return `GyrOS opened a pull request for ${t} and is now watching it.`;
+    case 'stopped':
+      return `GyrOS stopped working on ${t}.`;
+    case 'finished':
+      return `GyrOS is done with ${t} (${d.status}).`;
+  }
+}
+
+/** A short status of the workshop for decisions: what runs, who's needed. */
+export function workshopLine(gyros: GyrosState | null): string {
+  if (!gyros) return '';
+  if (!gyros.connected) return '\nThe workshop is quiet: GyrOS is not reachable right now.';
+  const needs = gyros.runs.filter((r) => r.pending);
+  const working = gyros.runs.filter((r) => !r.pending);
+  if (gyros.runs.length === 0) return '\nAt the workshop, GyrOS has nothing to do right now.';
+  const parts = [
+    working.length > 0 &&
+      `GyrOS is working on ${working
+        .slice(0, 3)
+        .map((r) => `${r.ticketKey ?? 'a ticket'} (${r.stepLabel})`)
+        .join(', ')}${working.length > 3 ? ` and ${working.length - 3} more` : ''}`,
+    needs.length > 0 &&
+      `waiting for a human: ${needs
+        .slice(0, 3)
+        .map((r) => `${r.ticketKey ?? 'a ticket'} (${r.pendingLabel})`)
+        .join(', ')}${needs.length > 3 ? ` and ${needs.length - 3} more` : ''}`,
+  ].filter(Boolean);
+  return `\nAt the workshop: ${parts.join('; ')}.`;
+}
+
 /** "coffee ×2, stroll" for the current sim day, so repetition is visible to the model. */
 export function todaySoFar(ctx: BrainContext): string {
   const day = dayOf(ctx.snapshot.simTime);
@@ -197,7 +275,7 @@ function diaryBlock(diary: DiaryEntry | null): string {
 
 // --- Decide ------------------------------------------------------------------
 
-export function decideTool(kinds: ActivityKind[], bookIds: string[]): ToolSpec {
+export function decideTool(kinds: ActivityKind[], bookIds: string[], partners: string[] = []): ToolSpec {
   return {
     name: 'decide',
     description: 'Choose what to do next.',
@@ -219,6 +297,9 @@ export function decideTool(kinds: ActivityKind[], bookIds: string[]): ToolSpec {
                 description: `Only when activity is "browse": what you want to look up, as a short web search query (max ${MAX_QUERY_CHARS} characters).`,
               },
             }
+          : {}),
+        ...(kinds.includes('chat') && partners.length > 0
+          ? { with: { type: 'string', enum: partners, description: 'Only when activity is "chat": who you want to talk to.' } }
           : {}),
       },
       required: ['thought', 'activity'],
@@ -249,6 +330,12 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
     .map((k) => {
       const a = ACTIVITIES[k];
       const minutes = k === 'sleep' ? 'until morning' : `${a.minutes} min`;
+      if (k === 'chat') {
+        const here = presentNeighbors(ctx)
+          .map((n) => `${n.name} the ${n.species} @ ${PLACES[n.place].name}`)
+          .join('; ');
+        return `- chat (${minutes}): talk with someone who's around right now: ${here}. Name them in \`with\`.`;
+      }
       return `- ${k} @ ${PLACES[a.place].name} (${minutes}): ${a.description}`;
     })
     .join('\n');
@@ -274,7 +361,7 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
             return `${n.name} the ${n.species} (${PLACES[n.place].name}${when})`;
           })
           .join(', ')}. Nobody else.`
-      : 'Nobody else lives in Ampliville: you can\'t talk to anyone in person.';
+      : `Nobody else lives in ${ctx.snapshot.persona.town}: you can't talk to anyone in person.`;
   const company = `\n${around} Your company comes from the colleagues who watch you: their letters in the post box, and the notes you can pin on the notice board inviting them to write.`;
 
   const today = todaySoFar(ctx);
@@ -285,12 +372,13 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
     waiting > 0 && oldestSimTime !== null
       ? `\n${waiting === 1 ? 'A letter is' : `${waiting} letters are`} waiting for you in the post box at the plaza (the oldest since ${formatTime(oldestSimTime)}${answerNote}).`
       : '';
+  const workshop = workshopLine(ctx.snapshot.gyros);
   const open = ctx.snapshot.openQuestion;
   const asked = open ? `\nYour question "${open.text}" is still unanswered.` : '';
 
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)} — ${partOfDay(simTime)}.
 You are at ${place ? `${place.name}. ${place.description}` : 'somewhere in town'}${justFinished}${mail}${company}
-Today so far: ${today || 'nothing yet'}.${asked}
+Today so far: ${today || 'nothing yet'}.${asked}${workshop}
 
 How you feel:
 - energy: ${describeNeed(n.energy)}
@@ -534,34 +622,36 @@ export type ModerationTarget = 'letter' | 'reply' | 'search' | 'note' | 'art' | 
 
 const MODERATION_TARGETS: Record<ModerationTarget, { what: string; extra: string }> = {
   letter: {
-    what: 'a note an employee wrote to Ampli, an AI fox character. It may come with a hand-drawn doodle (attached image); judge the drawing too',
+    what: 'a note an employee wrote to {character}. It may come with a hand-drawn doodle (attached image); judge the drawing too',
     extra: '',
   },
   board: {
-    what: 'a note Ampli, an AI fox character, wants to pin on a public notice board for employees',
+    what: 'a note {character} wants to pin on a public notice board for employees',
     extra: '\n- statements or promises on behalf of the company',
   },
   art: {
-    what: 'an artwork (SVG code, title and caption) that Ampli, an AI fox character, made. It will be shown publicly in a gallery',
+    what: 'an artwork (SVG code, title and caption) that {character} made. It will be shown publicly in a gallery',
     extra: '\n- hidden text or shapes that spell out something offensive',
   },
   reply: {
-    what: 'a reply Ampli, an AI fox character, wrote to an employee. It will be shown publicly',
+    what: 'a reply {character} wrote to an employee. It will be shown publicly',
     extra:
       '\n- statements or promises on behalf of the company\n- anything that sounds like it repeats what a different person said privately',
   },
   search: {
-    what: 'a web search query Ampli, an AI fox character, wants to run. The query will be shown publicly',
+    what: 'a web search query {character} wants to run. The query will be shown publicly',
     extra: '\n- searches aimed at extremist content or at finding information about private individuals',
   },
   note: {
-    what: 'notes Ampli, an AI fox character, wrote after reading web pages. They will be shown publicly',
+    what: 'notes {character} wrote after reading web pages. They will be shown publicly',
     extra: '\n- claims presented as fact that look like dangerous misinformation (health, safety)',
   },
 };
 
-export function moderationSystem(target: ModerationTarget): string {
-  const { what, extra } = MODERATION_TARGETS[target];
+/** `character`: who the AI character is, e.g. "Ampli, an AI fox character". */
+export function moderationSystem(target: ModerationTarget, character = 'Ampli, an AI fox character'): string {
+  const { extra } = MODERATION_TARGETS[target];
+  const what = MODERATION_TARGETS[target].what.replace('{character}', character);
   return `You review short texts for an internal company web app. Employees leave notes for an AI character, and it replies. Public notes and replies are shown to all employees.
 
 You are reviewing ${what}.
@@ -627,7 +717,7 @@ You make art by writing SVG:
 - One <svg> element with viewBox="0 0 ${ART_VIEWBOX.width} ${ART_VIEWBOX.height}" and a background.
 - Shapes, paths, gradients and opacity only. At most about 120 elements.
 - No scripts, no event handlers, no links, no images, no external references, no fonts. Text only if it really belongs in the picture.
-- Simple, expressive, a bit naive: a small fox's painting, not clip art.
+- Simple, expressive, a bit naive: a small animal's painting, not clip art.
 Answer by calling the \`create_artwork\` tool once.`;
 }
 
@@ -664,13 +754,19 @@ export const sayTool: ToolSpec = {
 };
 
 /** The same instructions for both speakers; each gets its own persona and its own context. */
-export function chatSystem(persona: string, partner: string): string {
+/** Neighbours who are at their place right now. */
+export function presentNeighbors(ctx: BrainContext): Neighbor[] {
+  return ctx.snapshot.neighbors.filter((n) => neighborPresent(n, ctx.snapshot.simTime));
+}
+
+/** `where`: e.g. "Café Kiosk", the partner's place. */
+export function chatSystem(persona: string, partner: string, where = 'Café Kiosk'): string {
   return `${persona}
 
 ${GROUND_RULES}
 
 ## Your job right now
-You're at the café counter, talking with ${partner}. Say your next line: react to what was just said, ask or tell something, keep it natural and short. Don't repeat yourself, don't narrate actions, no asterisks. When the conversation has run its course, say goodbye and set \`end\` to true.
+You're at ${where}, talking with ${partner}. Say your next line: react to what was just said, ask or tell something, keep it natural and short, like two neighbours chatting over coffee. Everyday words, one thought per line. Don't repeat yourself, don't narrate actions, no asterisks. When the conversation has run its course, say goodbye and set \`end\` to true.
 Answer by calling the \`say\` tool once.`;
 }
 
@@ -681,11 +777,11 @@ function transcriptBlock(transcript: ChatTurn[]): string {
 }
 
 /** Ampli's side: its own state, memory and recent days. */
-export function ampliChatUser(ctx: BrainContext, partner: string, transcript: ChatTurn[]): string {
+export function ampliChatUser(ctx: BrainContext, partner: string, transcript: ChatTurn[], where = 'Café Kiosk'): string {
   const { simTime, agent } = ctx.snapshot;
   const n = agent.needs;
   const recent = recentLines(ctx, 10, ['chat_line']);
-  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. You're at the café counter with ${partner}.
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. You're at ${where} with ${partner}.
 Mood: ${agent.mood.label}. Energy ${describeNeed(n.energy)}, hunger ${describeNeed(n.satiety)}, company ${describeNeed(n.social)}.
 
 Your notebook:
@@ -699,9 +795,15 @@ ${transcriptBlock(transcript)}`;
 }
 
 /** The neighbour's side: its own notes and only what it can see of Ampli. */
-export function neighborChatUser(ctx: BrainContext, ampli: string, notes: string[], transcript: ChatTurn[]): string {
+export function neighborChatUser(
+  ctx: BrainContext,
+  ampli: string,
+  notes: string[],
+  transcript: ChatTurn[],
+  where = 'Café Kiosk',
+): string {
   const { simTime, agent } = ctx.snapshot;
-  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. ${ampli} is at your counter and looks ${agent.mood.label}.
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. ${ampli} came by to see you at ${where} and looks ${agent.mood.label}.
 
 Your notes (your long-term memory):
 ${notes.length > 0 ? notes.map((n) => `- ${n}`).join('\n') : '(none yet)'}
@@ -735,7 +837,7 @@ export function neighborNotesSystem(persona: string, ampli: string): string {
 ${GROUND_RULES}
 
 ## Your job right now
-${ampli} just left the counter. Rewrite your notes: what you know about ${ampli} and the town, and what you'd like to remember or ask next time. Keep what still matters, merge, drop the rest. At most ${NEIGHBOR_NOTES_LIMIT} short notes.
+${ampli} just left. Rewrite your notes: what you know about ${ampli} and the town, and what you'd like to remember or ask next time. Keep what still matters, merge, drop the rest. At most ${NEIGHBOR_NOTES_LIMIT} short notes.
 Answer by calling the \`write_notes\` tool once.`;
 }
 
@@ -788,4 +890,104 @@ ${notebookBlock(ctx.notebook)}
 
 What happened recently (oldest first, including earlier notes and letters):
 ${recent.join('\n') || '(not much yet)'}`;
+}
+
+// --- Workshop (GyrOS) ------------------------------------------------------------
+
+// --- The workshop bell ---------------------------------------------------------------------
+
+const bellRun = (r: GyrosRun) =>
+  `${r.ticketKey ?? 'a run'}${r.workflow === 'carplan' ? '' : ` (${r.workflow})`} waits for ${r.pendingLabel ?? 'a human'} (${r.waitingSince ? waitedFor(r.waitingSince) : 'a while'})`;
+
+/** The bell without a model: plain facts, used when the LLM is off, fails or its text is held. */
+export function bellFallback(runs: GyrosRun[]): string {
+  const shown = runs.slice(0, 3).map(bellRun);
+  const more = runs.length > shown.length ? ` And ${runs.length - shown.length} more.` : '';
+  return `Ding! GyrOS needs a human: ${shown.join('; ')}.${more}`;
+}
+
+export const bellTool: ToolSpec = {
+  name: 'ring_bell',
+  description: 'Ring the workshop bell and say who is waiting for what.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: {
+        type: 'string',
+        description:
+          'A short, friendly heads-up to the people who watch you: 1-2 sentences, under 250 characters. Name the tickets and what they wait for; group similar ones. No guilt-tripping.',
+      },
+    },
+    required: ['text'],
+  },
+};
+
+export function bellSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the workshop, where GyrOS turns tickets into pull requests. Some of its runs have been waiting for a human decision for a long time, and nothing moves until someone looks. You ring the bell so the people who watch you notice. You can't decide anything in GyrOS yourself; a person has to open it.
+Say who is waiting for what, and for how long, in your own voice. They know who you are, so don't introduce yourself. The links to each run are shown next to your words, so keep it short. Only use the facts below. Answer by calling the \`ring_bell\` tool once.`;
+}
+
+export function bellUser(ctx: BrainContext, runs: GyrosRun[]): string {
+  const lines = runs.map((r) => `- ${ticketName(r.ticketKey, r.title)} [${r.workflow}]: waiting for ${r.pendingLabel ?? 'a human'} for ${r.waitingSince ? waitedFor(r.waitingSince) : 'a while'}`);
+  return `It is day ${dayOf(ctx.snapshot.simTime)}, ${formatTime(ctx.snapshot.simTime)}.
+
+Waiting for a human for too long:
+${lines.join('\n')}`;
+}
+
+export const workshopTool: ToolSpec = {
+  name: 'explain',
+  description: 'Explain what you see at the workshop.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: {
+        type: 'string',
+        description: 'What GyrOS is doing right now, in plain words for people who have never seen an AI agent pipeline. 2-4 sentences.',
+      },
+    },
+    required: ['text'],
+  },
+};
+
+export function workshopSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the workshop watching GyrOS, an AI system the people who watch you use at work. It turns a Jira ticket into a pull request: it reads the ticket, asks questions, drafts a plan a human approves, lets an AI agent change the code, runs tests and a browser check, has a second model review the change, and opens a pull request. A human decides at the important steps.
+Explain what you see right now, in plain words, for someone who has never seen this. Mention it plainly if GyrOS is waiting for a human. Only use the facts below; don't guess what the tickets are about beyond their titles.
+Answer by calling the \`explain\` tool once.`;
+}
+
+export function workshopUser(ctx: BrainContext): string {
+  const g = ctx.snapshot.gyros;
+  const runs =
+    g && g.runs.length > 0
+      ? g.runs
+          .slice(0, 8)
+          .map(
+            (r) =>
+              `- ${ticketName(r.ticketKey, r.title)} [${r.workflow}]: ${r.pending ? `waiting for a human: ${r.pendingLabel}` : r.stepLabel}${r.round > 1 ? `, round ${r.round}` : ''}`,
+          )
+          .join('\n')
+      : '(nothing running right now)';
+  const recent = ctx.recentEvents
+    .filter((e) => e.type === 'gyros')
+    .slice(-8)
+    .map(describeEvent)
+    .filter(Boolean);
+  return `It is day ${dayOf(ctx.snapshot.simTime)}, ${formatTime(ctx.snapshot.simTime)}.
+
+What GyrOS is working on right now:
+${runs}
+
+What happened at the workshop recently:
+${recent.join('\n') || '(nothing new)'}`;
 }

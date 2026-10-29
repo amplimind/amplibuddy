@@ -15,6 +15,7 @@ import {
   MAX_DOODLE_BYTES,
   REPORTS_TO_HOLD,
   cleanSvg,
+  repairSvg,
   MAX_MEMORY_CHARS,
   MAX_QUERY_CHARS,
   MAX_REPLY_CHARS,
@@ -31,6 +32,7 @@ import {
   type WebSource,
 } from '@ampli-world/shared';
 import { withoutText } from './library.ts';
+import { registerSetup } from './setup.ts';
 import type { Sim, SseMessage } from './sim.ts';
 
 const MAX_THOUGHT_CHARS = 600;
@@ -212,6 +214,8 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
 
   app.get('/api/state', (c) => c.json(sim.snapshot()));
 
+  registerSetup(app, { adminToken: opts.adminToken, store: sim.store });
+
   app.get('/api/events', (c) => {
     const limit = Math.min(200, Number(c.req.query('limit') ?? 80) || 80);
     const before = Number(c.req.query('before')) || undefined;
@@ -320,7 +324,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
   app.get('/api/notes', (c) => {
     const notes = store
       .recentEvents(200)
-      .filter((e) => e.type === 'note_posted' && !e.data.held)
+      .filter((e) => e.type === 'note_posted' && !e.data.held && !!e.data.text)
       .reverse()
       .slice(0, 5);
     return c.json(notes);
@@ -334,7 +338,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     const match = /^(\d+)\.svg$/.exec(c.req.param('file'));
     const art = match ? store.artworkSvg(Number(match[1])) : null;
     if (!art || art.status !== 'shown') return c.json({ error: 'not found' }, 404);
-    return svgResponse(art.svg);
+    return svgResponse(repairSvg(art.svg));
   });
 
   /** Anyone can report a public letter once; enough reports take it off the board until an admin decides. */
@@ -532,11 +536,42 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json({ ok: true });
   });
 
+  app.post('/api/brain/workshop-note', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body)) return c.json({ error: 'bad request' }, 400);
+    const llm = parseLlm(body.llm);
+    if (llm) store.recordLlmCall('workshop', llm);
+    const text = shortString(body.text, MAX_THOUGHT_CHARS);
+    if (!text) return c.json({ error: 'empty note' }, 400);
+    sim.log({ type: 'workshop_note', data: { text, ...(llm ? { llm } : {}) } });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/brain/gyros-nudge', async (c) => {
+    if (!sim.gyros) return c.json({ error: 'no workshop' }, 404);
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body) || !Array.isArray(body.runIds)) return c.json({ error: 'bad request' }, 400);
+    const metas = (Array.isArray(body.llm) ? body.llm : []).map(parseLlm).filter((m): m is LlmMeta => !!m);
+    for (const meta of metas) store.recordLlmCall('workshop', meta);
+    const text = shortString(body.text, MAX_BOARD_NOTE_CHARS);
+    const runIds = body.runIds.filter((id): id is string => typeof id === 'string').slice(0, 20);
+    if (!text) return c.json({ error: 'empty text' }, 400);
+    const nudge = sim.gyros.nudge(runIds, text, engine.simTime);
+    // 409: nothing to ring for anymore (already rung, or the runs moved on meanwhile).
+    if (!nudge) return c.json({ error: 'nothing overdue' }, 409);
+    sim.log({ type: 'gyros_nudge', data: { text, runs: nudge.runs, ...(metas[0] ? { llm: metas[0] } : {}) } });
+    return c.json({ ok: true, runs: nudge.runs.length });
+  });
+
   app.post('/api/brain/note', async (c) => {
     const body: unknown = await c.req.json().catch(() => null);
     if (!isRecord(body)) return c.json({ error: 'bad request' }, 400);
     const metas = (Array.isArray(body.llm) ? body.llm : []).map(parseLlm).filter((m): m is LlmMeta => !!m);
     for (const meta of metas) store.recordLlmCall('note', meta);
+    if (body.failed === true) {
+      sim.log({ type: 'note_posted', data: { failed: true } });
+      return c.json({ ok: true, pinned: false });
+    }
     const text = shortString(body.text, MAX_BOARD_NOTE_CHARS);
     if (!text) return c.json({ error: 'empty note' }, 400);
     if (body.held === true) {
@@ -692,7 +727,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
   app.get('/api/admin/art/:file', (c) => {
     const match = /^(\d+)\.svg$/.exec(c.req.param('file'));
     const art = match ? store.artworkSvg(Number(match[1])) : null;
-    return art ? svgResponse(art.svg) : c.json({ error: 'not found' }, 404);
+    return art ? svgResponse(repairSvg(art.svg)) : c.json({ error: 'not found' }, 404);
   });
 
   app.post('/api/admin/art/:id/:action', (c) => {

@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { NudgeMemory } from './gyros.ts';
 import type {
   AdminLetter,
   ArtStatus,
@@ -564,6 +565,22 @@ export class Store {
       .prepare('SELECT COUNT(*) AS n FROM letters WHERE ip_hash = ? AND created_real >= ?')
       .get(ipHash, sinceIso) as Row;
     return Number(row.n);
+  }
+
+  // --- GyrOS workshop bell ---
+
+  loadGyrosNudges(): NudgeMemory | null {
+    const row = this.db.prepare("SELECT value FROM kv WHERE key = 'gyros_nudges'").get() as Row | undefined;
+    if (!row) return null;
+    try {
+      return JSON.parse(String(row.value)) as NudgeMemory;
+    } catch {
+      return null;
+    }
+  }
+
+  saveGyrosNudges(memory: NudgeMemory): void {
+    this.db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES ('gyros_nudges', ?)").run(JSON.stringify(memory));
   }
 
   // --- Moderation & admin ---

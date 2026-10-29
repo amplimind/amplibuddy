@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatClock, type Artwork } from '@ampli-world/shared';
+import { ART_VERSION, formatClock, type Artwork } from '@ampli-world/shared';
 import { SourceBadge } from './Panel.tsx';
 
 export function Gallery({ name, artVersion }: { name: string; artVersion: number }) {
@@ -22,7 +22,7 @@ export function Gallery({ name, artVersion }: { name: string; artVersion: number
       </p>
       {art.map((a) => (
         <figure key={a.id} className="artwork">
-          <img src={`/api/art/${a.id}.svg`} alt={`${a.title}: ${a.caption}`} loading="lazy" />
+          <img src={`/api/art/${a.id}.svg?v=${ART_VERSION}`} alt={`${a.title}: ${a.caption}`} loading="lazy" />
           <figcaption>
             <strong>{a.title}</strong>
             <span className="feed-time">{formatClock(a.simTime)}</span>

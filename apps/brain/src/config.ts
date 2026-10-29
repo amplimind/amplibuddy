@@ -1,15 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { parseFrontmatter, parseHours } from '@ampli-world/shared';
+import { PLACES, parseFrontmatter, parseHours, type PlaceId } from '@ampli-world/shared';
+import { loadEnvironment, neighborsDir, personaFile } from '@ampli-world/shared/node';
 import { OPENROUTER_URL, parseReasoning, type LlmEndpoint } from './llm.ts';
-import { buildPersonaPrompt } from './prompts.ts';
+import { buildNeighborPrompt, buildPersonaPrompt } from './prompts.ts';
 import type { SearchProvider } from './search.ts';
 
-const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-
-const envFile = `${ROOT}.env`;
-if (existsSync(envFile)) process.loadEnvFile(envFile);
+loadEnvironment();
 
 const baseUrl = (process.env.LLM_BASE_URL || OPENROUTER_URL).replace(/\/+$/, '');
 const openRouter = baseUrl === OPENROUTER_URL;
@@ -105,7 +102,7 @@ export const config = {
 
 /** The persona file's body is the character's system prompt. */
 export function loadPersonaPrompt(): string {
-  return buildPersonaPrompt(readFileSync(`${ROOT}world/persona.md`, 'utf8'));
+  return buildPersonaPrompt(readFileSync(personaFile(), 'utf8'));
 }
 
 
@@ -120,7 +117,8 @@ export interface NeighborPersona {
 }
 
 export function loadNeighborPersonas(): NeighborPersona[] {
-  const dir = `${ROOT}world/neighbors`;
+  const dir = neighborsDir();
+  const town = parseFrontmatter(readFileSync(personaFile(), 'utf8')).meta.town ?? 'Ampliville';
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith('.md'))
@@ -130,13 +128,16 @@ export function loadNeighborPersonas(): NeighborPersona[] {
     .map(({ file, meta, body }) => {
       const id = basename(file, '.md');
       const hours = parseHours(meta.hours);
+      const name = meta.name ?? id;
+      const species = meta.species ?? 'animal';
+      const place = (meta.place && meta.place in PLACES ? meta.place : 'cafe') as PlaceId;
       return {
         id,
-        name: meta.name ?? id,
-        species: meta.species ?? 'animal',
-        place: meta.place ?? 'cafe',
+        name,
+        species,
+        place,
         ...(hours ? { hours } : {}),
-        prompt: body,
+        prompt: buildNeighborPrompt(body, { name, species, place: PLACES[place].name, town, hours }),
       };
     });
 }

@@ -11,7 +11,9 @@ import type {
   MailReplyRequest,
   MailVerdictRequest,
   NeighborNotesRequest,
+  GyrosNudgeRequest,
   NoteRequest,
+  WorkshopNoteRequest,
   ReadingRequest,
   WorldEvent,
 } from '@ampli-world/shared';
@@ -58,6 +60,14 @@ export class SimClient {
 
   diary(body: DiaryRequest): Promise<unknown> {
     return this.request('POST', '/api/brain/diary', body);
+  }
+
+  workshopNote(body: WorkshopNoteRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/workshop-note', body);
+  }
+
+  gyrosNudge(body: GyrosNudgeRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/gyros-nudge', body);
   }
 
   note(body: NoteRequest): Promise<unknown> {

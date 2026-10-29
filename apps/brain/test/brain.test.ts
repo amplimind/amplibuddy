@@ -31,7 +31,7 @@ import {
   toReply,
   toVerdict,
 } from '../src/mind.ts';
-import { ampliChatUser, buildPersonaPrompt, decideUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
+import { ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, buildPersonaPrompt, decideTool, decideUser, moderationSystem, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, resultsBlock } from '../src/search.ts';
 
@@ -43,7 +43,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     snapshot: {
       simTime,
       minutesPerSecond: 1,
-      persona: { name: 'Ampli', species: 'fox', town: 'Ampliville' },
+      persona: { name: 'Ampli', species: 'fox', look: 'fox', town: 'Ampliville' },
       agent: {
         place: 'home',
         position: { ...PLACES.home.spot },
@@ -58,7 +58,8 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
       mailWaiting: 0,
       latestArtId: null,
       openQuestion: null,
-      neighbors: [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe' }],
+      gyros: null,
+      neighbors: [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', look: 'hedgehog', place: 'cafe' }],
     },
     idle: true,
     recentEvents: [],
@@ -360,7 +361,7 @@ test('chatting with Hedda: only offered when she is there (opening hours)', () =
 
 test('the prompt says when a neighbour is around', () => {
   const c = ctx(9 * 60);
-  c.snapshot.neighbors = [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe', hours: { from: 8, to: 12 } }];
+  c.snapshot.neighbors = [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', look: 'hedgehog', place: 'cafe', hours: { from: 8, to: 12 } }];
   assert.match(decideUser(c, availableActivities(9 * 60)), /Hedda the hedgehog \(Café Kiosk, there 08:00-12:00, there now\)/);
   c.snapshot.simTime = 15 * 60;
   assert.match(decideUser(c, availableActivities(15 * 60)), /not there now/);
@@ -572,4 +573,114 @@ test('blocked options are explained, not silently missing', () => {
   const p = decideUser(ctx(NOON), availableActivities(NOON), ['post_note: the board is full until tomorrow']);
   assert.match(p, /Not possible right now \(if you were planning one of these, let it go or find another way\):\n- post_note: the board is full until tomorrow/);
   assert.doesNotMatch(decideUser(ctx(NOON), availableActivities(NOON)), /Not possible right now/);
+});
+
+// --- Workshop (GyrOS) -----------------------------------------------------------------------
+
+const gyrosRun = (over: Record<string, unknown> = {}) => ({
+  runId: 'r1',
+  workflow: 'carplan',
+  ticketKey: 'CP-12',
+  title: 'Fix the login',
+  status: 'running',
+  node: 'gates',
+  station: 'gates' as const,
+  stepLabel: 'running the gates (lint, tests)',
+  pending: null,
+  pendingLabel: null,
+  round: 2,
+  busy: true,
+  prUrl: null,
+  waitingSince: null as string | null,
+  updatedAt: '',
+  overdue: false,
+  ...over,
+});
+
+test('workshop: offered only when GyrOS is connected, and described in the prompt', () => {
+  assert.ok(!availableActivities(NOON).includes('visit_workshop'));
+  assert.ok(availableActivities(NOON, { canVisitWorkshop: true }).includes('visit_workshop'));
+  assert.equal(workshopLine(null), '', 'no GyrOS configured, no line');
+  const line = workshopLine({
+    connected: true,
+    uiUrl: null,
+    nudge: null,
+    runs: [gyrosRun(), gyrosRun({ runId: 'r2', ticketKey: 'CP-13', status: 'waiting', pending: 'draft_review', pendingLabel: 'a draft to review' })],
+  });
+  assert.match(line, /GyrOS is working on CP-12 \(running the gates/);
+  assert.match(line, /waiting for a human: CP-13 \(a draft to review\)/);
+  assert.match(workshopLine({ connected: false, uiUrl: null, runs: [], nudge: null }), /not reachable/);
+});
+
+test('workshop explanations only see whitelisted facts', () => {
+  const c = ctx(NOON);
+  c.snapshot.gyros = { connected: true, uiUrl: null, runs: [gyrosRun()], nudge: null };
+  const prompt = workshopUser(c);
+  assert.match(prompt, /CP-12 \("Fix the login"\) \[carplan\]: running the gates \(lint, tests\), round 2/);
+  assert.equal(
+    gyrosEventLine({ kind: 'needs_you', runId: 'r', ticketKey: 'CP-13', title: null, station: 'draft', stepLabel: 'x', pendingLabel: 'a draft to review', round: 1, status: 'waiting' }),
+    'GyrOS is waiting for a human on CP-13: it needs a draft to review.',
+  );
+});
+
+test('workshop bell: a routine sends Ampli to ring it for overdue runs, after sleep and food', () => {
+  const since = new Date(Date.now() - 5 * 3_600_000).toISOString();
+  const overdueRun = gyrosRun({ runId: 'r2', ticketKey: 'CP-13', status: 'waiting', pending: 'verdict', pendingLabel: 'a verdict', waitingSince: since, overdue: true });
+  const c = ctx(NOON);
+  c.snapshot.gyros = { connected: true, uiUrl: null, runs: [gyrosRun(), overdueRun], nudge: null };
+
+  const rang = routineDecision(c, { canRingBell: true });
+  assert.equal(rang?.plan.kind, 'visit_workshop');
+  assert.match(rang!.thought.text, /CP-13 has been waiting 5 h for a verdict/);
+  assert.equal(routineDecision(c, { canRingBell: false }), null, 'not while a recent attempt cools down');
+
+  const hungry = ctx(NOON, { satiety: 5 });
+  hungry.snapshot.gyros = c.snapshot.gyros;
+  assert.equal(routineDecision(hungry, { canRingBell: true })?.plan.kind, 'eat', 'food first');
+
+  c.snapshot.gyros = { ...c.snapshot.gyros, connected: false };
+  assert.equal(routineDecision(c, { canRingBell: true }), null, 'no bell while GyrOS is unreachable');
+
+  assert.equal(bellFallback([overdueRun]), 'Ding! GyrOS needs a human: CP-13 waits for a verdict (5 h).');
+  assert.match(bellUser(c, [overdueRun]), /CP-13 \("Fix the login"\) \[carplan\]: waiting for a verdict for 5 h/);
+  assert.match(
+    describeEvent({ id: 1, simTime: NOON, realTime: '', type: 'gyros_nudge', data: { text: 'Ding!', runs: [] } }) ?? '',
+    /You rang the workshop bell for the people who watch you: "Ding!"/,
+  );
+});
+
+test('chat: whoever is around, picked by name, and the chat happens at their place', () => {
+  const c = ctx(NOON);
+  c.snapshot.neighbors = [
+    { id: 'hedda', name: 'Hedda', species: 'hedgehog', look: 'hedgehog', place: 'cafe', hours: { from: 8, to: 12 } },
+    { id: 'bruno', name: 'Bruno', species: 'bear', look: 'bear', place: 'park', hours: { from: 6, to: 14 } },
+  ];
+  const kinds = availableActivities(NOON, { canChat: true });
+  const prompt = decideUser(c, kinds);
+  assert.match(prompt, /chat \(30 min\): talk with someone who's around right now: Bruno the bear @ Park/);
+  assert.doesNotMatch(prompt, /Hedda the hedgehog @/, 'Hedda has gone home at noon');
+
+  const tool = decideTool(kinds, [], ['Bruno']);
+  assert.deepEqual((tool.parameters.properties as Record<string, { enum?: string[] }>).with?.enum, ['Bruno']);
+  const meta = { model: 'm', promptTokens: 1, completionTokens: 1, costUsd: 0, latencyMs: 1 };
+  const decision = toDecision({ activity: 'chat', thought: 'Bruno is in the park.', with: 'bruno' }, meta, c, kinds);
+  assert.deepEqual(decision.plan, { kind: 'chat', partnerId: 'bruno' });
+
+  const nobody = ctx(22 * 60);
+  nobody.snapshot.neighbors = c.snapshot.neighbors;
+  assert.throws(() => toDecision({ activity: 'chat', thought: 'x' }, meta, nobody, ['chat']), /nobody is around/);
+});
+
+test('your own character: checks and neighbours use its name, not Ampli the fox', () => {
+  assert.match(moderationSystem('board', 'Pip, an AI tiny mouse character'), /a note Pip, an AI tiny mouse character wants to pin/);
+  assert.match(moderationSystem('board'), /Ampli, an AI fox character/);
+  const prompt = buildNeighborPrompt('You look after the park.', {
+    name: 'Bruno',
+    species: 'bear',
+    place: 'Park',
+    town: 'Mausheim',
+    hours: { from: 6, to: 14 },
+  });
+  assert.match(prompt, /- Name: Bruno/);
+  assert.match(prompt, /You live in Mausheim, a tiny town. You're usually at Park, 06:00-14:00./);
 });

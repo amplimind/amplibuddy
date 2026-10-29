@@ -1,4 +1,5 @@
 import {
+  ART_VERSION,
   ACTIVITIES,
   PLACES,
   formatClock,
@@ -70,11 +71,14 @@ export function statusLine(snapshot: WorldSnapshot, events: WorldEvent[]): strin
   if (agent.activity) {
     const book = agent.activity.kind === 'read' ? currentBook(events) : undefined;
     const query = agent.activity.query;
+    const partner = snapshot.neighbors.find((n) => n.id === agent.activity!.partnerId)?.name;
     const what = book
       ? `reading “${book}”`
       : query
         ? `looking up “${query}” online`
-        : ACTIVITIES[agent.activity.kind].verb;
+        : partner
+          ? `chatting with ${partner} at ${placeRef(agent.activity.place)}`
+          : ACTIVITIES[agent.activity.kind].verb;
     return `is ${what} until ${formatTime(agent.activity.endsAt)}`;
   }
   return `is standing around at ${placeRef(agent.place ?? 'plaza')}`;
@@ -96,17 +100,20 @@ export function StatusCard({ snapshot, events }: { snapshot: WorldSnapshot; even
   const { agent, persona } = snapshot;
   return (
     <section className="card status">
-      <p className="status-line">
-        <strong>{persona.name}</strong> {statusLine(snapshot, events)}
-      </p>
-      <p className="mood">
-        Mood: <strong>{agent.mood.label}</strong>
-      </p>
-
-      <NeedBar label="Energy" value={agent.needs.energy} color="var(--energy)" />
-      <NeedBar label="Fed" value={agent.needs.satiety} color="var(--satiety)" />
-      <NeedBar label="Fun" value={agent.needs.fun} color="var(--fun)" />
-      <NeedBar label="Company" value={agent.needs.social} color="var(--social)" />
+      <div className="status-head">
+        <p className="status-line">
+          <strong>{persona.name}</strong> {statusLine(snapshot, events)}
+        </p>
+        <span className="chip" title="Mood">
+          {agent.mood.label}
+        </span>
+      </div>
+      <div className="needs">
+        <NeedBar label="Energy" value={agent.needs.energy} color="var(--energy)" />
+        <NeedBar label="Fed" value={agent.needs.satiety} color="var(--satiety)" />
+        <NeedBar label="Fun" value={agent.needs.fun} color="var(--fun)" />
+        <NeedBar label="Company" value={agent.needs.social} color="var(--social)" />
+      </div>
     </section>
   );
 }
@@ -147,7 +154,9 @@ function FeedItem({ event }: { event: WorldEvent }) {
             ? `reading “${event.data.bookTitle}”`
             : event.data.query
               ? `looking up “${event.data.query}”`
-              : ACTIVITIES[event.data.kind].verb}
+              : event.data.with
+                ? `chatting with ${event.data.with}`
+                : ACTIVITIES[event.data.kind].verb}
         </li>
       );
     case 'diary_written':
@@ -182,6 +191,9 @@ function FeedItem({ event }: { event: WorldEvent }) {
       if (event.data.held) {
         return <li className="feed-item feed-minor">{time} wrote a note, but it didn't pass the content check</li>;
       }
+      if (event.data.failed || !event.data.text) {
+        return <li className="feed-item feed-minor">{time} went to the notice board, but the note didn't get written</li>;
+      }
       return (
         <li className="feed-item pinned-note">
           {time}
@@ -205,7 +217,7 @@ function FeedItem({ event }: { event: WorldEvent }) {
       return (
         <li className="feed-item feed-art">
           {time}
-          <img src={`/api/art/${event.data.artworkId}.svg`} alt={event.data.title} loading="lazy" />
+          <img src={`/api/art/${event.data.artworkId}.svg?v=${ART_VERSION}`} alt={event.data.title} loading="lazy" />
           <p>
             <span className="feed-kicker">Made “{event.data.title}”</span>
             {event.data.caption}
@@ -236,16 +248,42 @@ function FeedItem({ event }: { event: WorldEvent }) {
       ) : (
         <li className="feed-item feed-minor">{time} read a private letter</li>
       );
+    case 'gyros':
+      return null;
+    case 'gyros_nudge':
+      return (
+        <li className="feed-item feed-bell">
+          {time}
+          <p>
+            <span className="feed-kicker">🔔 Rang the workshop bell</span>
+            {event.data.text}
+          </p>
+          {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
+    case 'workshop_note':
+      return (
+        <li className="feed-item feed-workshop">
+          {time}
+          <p>
+            <span className="feed-kicker">⚙️ In the GyrOS workshop</span>
+            {event.data.text}
+          </p>
+          {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
     case 'activity_finished':
       return null;
   }
 }
 
 export function Feed({ events }: { events: WorldEvent[] }) {
-  if (events.length === 0) return <p className="empty">Nothing has happened yet. Give it a moment.</p>;
+  // Only what Ampli does; GyrOS changes have their own log in the workshop panel.
+  const own = events.filter((e) => e.type !== 'gyros' && e.type !== 'activity_finished');
+  if (own.length === 0) return <p className="empty">Nothing has happened yet. Give it a moment.</p>;
   return (
     <ol className="feed">
-      {[...events].reverse().map((e) => (
+      {[...own].reverse().map((e) => (
         <FeedItem key={e.id} event={e} />
       ))}
     </ol>
@@ -291,6 +329,18 @@ export function NotebookView({ notebook, name }: { notebook: string[]; name: str
   );
 }
 
+/** Both kinds of memory in one place: the notebook it carries and the diary it wrote. */
+export function MemoryView({ diary, notebook, name }: { diary: DiaryEntry[]; notebook: string[]; name: string }) {
+  return (
+    <div className="memory-tab">
+      <h2 className="section-title">Notebook</h2>
+      <NotebookView notebook={notebook} name={name} />
+      <h2 className="section-title">Diary</h2>
+      <DiaryView diary={diary} name={name} />
+    </div>
+  );
+}
+
 export function HowItWorks({ name, usage, neighbors }: { name: string; usage: UsageToday; neighbors: Neighbor[] }) {
   return (
     <div className="how">
@@ -299,8 +349,8 @@ export function HowItWorks({ name, usage, neighbors }: { name: string; usage: Us
       </p>
       <h3>1. The world keeps running</h3>
       <p>
-        A small simulation runs all the time, whether anyone is watching or not. It has a clock, places, and three needs
-        that slowly drain: energy, hunger and fun. Mood follows from those.
+        A small simulation runs all the time, whether anyone is watching or not. It has a clock, places, and four needs
+        that slowly drain: energy, hunger, fun and company. Mood follows from those.
       </p>
       <h3>2. The brain decides</h3>
       <p>
@@ -349,21 +399,32 @@ export function HowItWorks({ name, usage, neighbors }: { name: string; usage: Us
       </p>
       <h3>9. Company</h3>
       <p>
-        {name} has a fourth need: company. It drains when {name} is alone and only fills up through people: your letters,
-        and the notes {name} pins on the notice board to invite them. Nobody else lives in town, so if you want {name} to
-        feel less lonely, write.
+        {name} has a fourth need: company. It drains when {name} is alone and fills up through others: your letters,
+        the notes {name} pins on the notice board to invite them{neighbors.length > 0 ? ', and chats with the neighbours' : ''}.{' '}
+        {neighbors.length > 0 ? 'Neighbours help' : 'Nobody else lives in town'}, but if you want {name} to feel less
+        lonely, write.
       </p>
-      {neighbors.map((n) => (
-        <section key={n.id}>
-          <h3>Two minds: {n.name}</h3>
+      <h3>10. The GyrOS workshop</h3>
+      <p>
+        If GyrOS runs on the same machine, the glass-roofed workshop shows its pipeline: every ticket in flight is a
+        little robot at the station it's working on, from the ticket desk through draft, workbench, gates and review to
+        the dock. A bell rings when a run waits for a human. If a run waits too long, {name} walks over, rings the bell
+        and says who is waiting for what, with links into GyrOS, once per wait. {name} only watches: the town reads
+        GyrOS's run list and never presses a button there. When {name} visits, the model gets ticket keys, titles and steps (no ticket text,
+        code or logs) and explains what's going on in plain words.
+      </p>
+      {neighbors.length > 0 && (
+        <section>
+          <h3>Several minds: the neighbours</h3>
           <p>
-            {n.name} the {n.species} is a second, separate AI character with her own persona and her own notes. In a
-            conversation, every line is its own model call that only sees that speaker's context: {name}'s notebook
-            and days, or {n.name}'s notes about {name}. That's what “multi-agent” means: separate minds, each with its
-            own memory, talking through a shared channel.
+            {neighbors.map((n) => `${n.name} the ${n.species}`).join(', ')}{' '}
+            {neighbors.length === 1 ? 'is a separate AI character' : 'are separate AI characters'}, each with their own
+            persona, place, hours and notes. In a conversation, every line is its own model call that only sees that
+            speaker's context: {name}'s notebook and days, or the neighbour's notes about {name}. That's what
+            “multi-agent” means: separate minds, each with its own memory, talking through a shared channel.
           </p>
         </section>
-      ))}
+      )}
       <h3>Things to watch for</h3>
       <ul>
         <li>How the same model makes different choices when its context changes.</li>
