@@ -1,0 +1,254 @@
+packages/shared/src/world.ts
+  s_2cca0dc321ad0c::t_53659941c6855f 6-7,69-76,212-220
+  s_2cca0dc321ad0c::t_fd0d2e131466bb 207-208
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_add9d22afa9b0c 1,180-181,321-325
+  s_2cca0dc321ad0c::t_fd0d2e131466bb 3,52-53,88-89,98
+  s_2cca0dc321ad0c::t_c20e4aedd6990b 138-142
+  s_2cca0dc321ad0c::t_10f8acfc490e4a 182-186,312-314
+  s_2cca0dc321ad0c::t_53659941c6855f 8,23-24,114-115,163-179,327-332
+  s_2cca0dc321ad0c::t_1cf802fc8b7c9d 326
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_8ef1151e0468b6 264-274,407-410,414
+  s_2cca0dc321ad0c::t_a5252d83680ad0 2
+  s_2cca0dc321ad0c::t_10f8acfc490e4a 194-196
+  s_2cca0dc321ad0c::t_b27af73c75933a 403
+  s_2cca0dc321ad0c::t_cb7e36da14eada 352-353
+  s_2cca0dc321ad0c::t_0e0a01865a21a3 103-116,251-252,281-283,286,332-339
+  s_2cca0dc321ad0c::t_e2db270f96398a 402,404-405
+  s_2cca0dc321ad0c::t_7138e88a6eec3d 74,79-81,157-159
+  s_2cca0dc321ad0c::t_0053e6fa34d480 416-418,420-424,427
+  s_2cca0dc321ad0c::t_6b3154bd6b8b0c 220
+  s_2cca0dc321ad0c::t_00c4bccb607dac 253-263,411-413
+  s_2cca0dc321ad0c::t_800cdc2a0ad30d 340-343,415
+world/templates/residents/web-nerd.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-21
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_3c0808d47af1cb 1,6,15-25,28-29,32-52,55,63,83-87,131
+  s_2cca0dc321ad0c::t_0e0a01865a21a3 7,12-13,74-82,88-91,96-100,103,126
+  s_2cca0dc321ad0c::t_00c4bccb607dac 10,106
+  s_2cca0dc321ad0c::t_ee4603866aa348 30-31
+  s_2cca0dc321ad0c::t_1fe90bca2a1de7 14
+"Ampli World.command"
+  s_2cca0dc321ad0c::t_82c6a5f9e26805 1-38,40-45
+  s_2cca0dc321ad0c::t_940effd23e2ede 39
+apps/web/src/Setup.tsx
+  s_2cca0dc321ad0c::t_950648e2e1dd57 544,549-550,555,766,769-777,832-837,914,946-953,959
+  s_2cca0dc321ad0c::t_b5b50e012ee884 618
+  s_2cca0dc321ad0c::t_ca9dc49511c868 680
+  s_2cca0dc321ad0c::t_e4f058ff140c38 1-7,9-11,13-102,104-106,109-113,120-184,190-543,545-548,551-554,560-603,607-617,619-657,729-765,767-768,778-831,838-913,915-945,954-958,960-965
+  s_2cca0dc321ad0c::t_cd2730cda29dc8 103,107-108,114-119,185-189
+  s_2cca0dc321ad0c::t_b3fac3237ee72a 8,12,658-679,681-728
+  s_2cca0dc321ad0c::t_e6a33f90adbf62 604-606
+  s_2cca0dc321ad0c::t_ed43809ffefa97 556-559
+apps/sim/test/gyros.test.ts
+  s_2cca0dc321ad0c::t_e15d910a5b41f8 1-3,5-28,31-63,105
+  s_2cca0dc321ad0c::t_bc37b677d547fc 4,64-104
+  s_2cca0dc321ad0c::t_a3bee9b8b38253 29-30
+apps/sim/test/setup.test.ts
+  s_2cca0dc321ad0c::t_ca9dc49511c868 90-96
+  s_2cca0dc321ad0c::t_b18dd6ef87e04e 1-89
+.gitignore
+  s_2cca0dc321ad0c::t_c0a3ff4d246313 5-9
+world/templates/characters/cozy.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+world/templates/characters/philosopher.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+packages/shared/src/species.ts
+  s_2cca0dc321ad0c::t_fd0d2e131466bb 1-26
+world/templates/characters/curious.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+scripts/start.ts
+  s_2cca0dc321ad0c::t_8f1c0bd8b72665 1-104
+.env.example
+  s_2cca0dc321ad0c::t_1bfcc9515d3fde 77-84
+  s_2cca0dc321ad0c::t_58e20d853315f9 85-87
+  s_2cca0dc321ad0c::t_e2db270f96398a 1-3
+packages/shared/src/index.ts
+  s_2cca0dc321ad0c::t_53659941c6855f 6
+  s_2cca0dc321ad0c::t_fd0d2e131466bb 7
+  s_2cca0dc321ad0c::t_89992867297e99 8
+packages/shared/src/setup.ts
+  s_2cca0dc321ad0c::t_89992867297e99 1-93,115-138
+  s_2cca0dc321ad0c::t_b3fac3237ee72a 94-114
+apps/sim/src/gyros.ts
+  s_2cca0dc321ad0c::t_9b03aff9bbd634 8,22-34,61,89-93,99-108,113,115-158,203-209
+  s_2cca0dc321ad0c::t_e12049cf53813a 1-7,9-21,35-60,62-88,94-98,109-112,114,159-202,210-255
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_bfd1cfb66f1fe1 3-4,6,9,105,120-121,131-133,136-138,140
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_3608d73a096a7c 4,570-584
+  s_2cca0dc321ad0c::t_9cec666c2f5dea 585
+world/templates/residents/inventor.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-21
+packages/shared/test/species.test.ts
+  s_2cca0dc321ad0c::t_b18dd6ef87e04e 1-19
+apps/sim/test/mail.test.ts
+  s_2cca0dc321ad0c::t_42ea0fcf900cdd 17,447
+  s_2cca0dc321ad0c::t_d4c776a2aa45b3 448
+  s_2cca0dc321ad0c::t_e52f158288c7bc 495-503
+packages/shared/src/art.ts
+  s_2cca0dc321ad0c::t_99f98c4aa46eaf 33-77,79-82,89,91
+packages/shared/src/gyros.ts
+  s_2cca0dc321ad0c::t_add9d22afa9b0c 34-35,38-54,61-71
+  s_2cca0dc321ad0c::t_53659941c6855f 1-33,36-37,55-60,72-184
+apps/web/src/TownCanvas.tsx
+  s_2cca0dc321ad0c::t_8d5d784d347eb8 1-2,5-28,31-38,45-61,64,66-82,84-91,96-106,109-111,113,115-116,119-135,141-142,144,146,150-197
+  s_2cca0dc321ad0c::t_9ce7411a23978e 107-108
+  s_2cca0dc321ad0c::t_bb17176c661a4f 83
+apps/sim/src/main.ts
+  s_2cca0dc321ad0c::t_e15d910a5b41f8 4,32,37-39,68
+  s_2cca0dc321ad0c::t_3608d73a096a7c 33-36
+  s_2cca0dc321ad0c::t_c0a3ff4d246313 58
+apps/sim/src/sim.ts
+  s_2cca0dc321ad0c::t_58b5d6580504f4 47
+  s_2cca0dc321ad0c::t_c20e4aedd6990b 48
+  s_2cca0dc321ad0c::t_e15d910a5b41f8 3,32-33,62
+apps/sim/src/config.ts
+  s_2cca0dc321ad0c::t_58b5d6580504f4 3,34,58
+  s_2cca0dc321ad0c::t_3608d73a096a7c 21-22
+  s_2cca0dc321ad0c::t_e15d910a5b41f8 17-20
+  s_2cca0dc321ad0c::t_c0a3ff4d246313 6,8,12-13,30,44-46,49
+  s_2cca0dc321ad0c::t_478961d810918e 2,4,24
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_1aac4e75381085 231-234,239-281,1036-1038,1040-1041,1082-1084,1106,1128-1129,1140-1150,1152-1174,1179-1181,1185-1228
+  s_2cca0dc321ad0c::t_00c4bccb607dac 1230-1307
+  s_2cca0dc321ad0c::t_1fe1a53e1eb5dc 1392-1394
+  s_2cca0dc321ad0c::t_c0b8ba9d154d31 1151,1175-1178,1182-1184
+  s_2cca0dc321ad0c::t_b5b50e012ee884 1308-1391,1395-1527,1529-1702
+  s_2cca0dc321ad0c::t_5d5dfde3469469 1057-1078
+  s_2cca0dc321ad0c::t_cd2730cda29dc8 1528
+  s_2cca0dc321ad0c::t_4986e26dad39a9 1703-1707
+  s_2cca0dc321ad0c::t_b3fac3237ee72a 1229,1708-1713
+  s_2cca0dc321ad0c::t_60ac55b58caff9 30,73-122,160-199,204-219,223,300-301,304-309,312-320,325,327-328,392-401,1039,1042-1056,1079-1081,1085-1105,1107-1127,1130-1139
+apps/web/src/Gallery.tsx
+  s_2cca0dc321ad0c::t_6b3154bd6b8b0c 25
+  s_2cca0dc321ad0c::t_a5252d83680ad0 2
+apps/web/src/Workshop.tsx
+  s_2cca0dc321ad0c::t_dba048f4733dfb 43-44,63,65-70,77,123-126
+  s_2cca0dc321ad0c::t_c0b8ba9d154d31 205-208,211,228-232
+  s_2cca0dc321ad0c::t_455de55bec1181 3-5,9,82-122,127-156,162-169,176-190,195,197-204,209-210,212-227,233-263
+  s_2cca0dc321ad0c::t_00c4bccb607dac 2,7-8,25-42,45-62,64,71-76,78-79
+  s_2cca0dc321ad0c::t_5d5dfde3469469 1,6,10-24,80-81,157-161,170-175,191-194,196
+apps/web/src/critters.ts
+  s_2cca0dc321ad0c::t_1291587ad66185 1-94,97-135,138-145,148-176,178-212
+  s_2cca0dc321ad0c::t_2ef9537f0cf635 95-96
+  s_2cca0dc321ad0c::t_642fd549f1afd5 136-137,146-147,177
+apps/brain/package.json
+  s_2cca0dc321ad0c::t_52f682640aee30 7
+apps/sim/package.json
+  s_2cca0dc321ad0c::t_52f682640aee30 7
+apps/web/src/town.ts
+  s_2cca0dc321ad0c::t_84701458ac61a8 800-815,819,821,823,826-827,829-836,839-842,861-891,894,897,909,911-915,917,919-920,1046
+  s_2cca0dc321ad0c::t_9cbf819ee56215 838,843-860,975
+  s_2cca0dc321ad0c::t_d90fd8ebc18f99 15,20,644-654,656-665,667,977-981,988,1037-1038
+  s_2cca0dc321ad0c::t_6b3154bd6b8b0c 765
+  s_2cca0dc321ad0c::t_d65143045b2794 12,908
+  s_2cca0dc321ad0c::t_a5252d83680ad0 2
+  s_2cca0dc321ad0c::t_6e11aca5b88dd0 892-893,895-896,898,904-907,910,916,918,1041-1045
+  s_2cca0dc321ad0c::t_ec07276719dbf4 899-903
+  s_2cca0dc321ad0c::t_e325e7d75a1616 10,13-14,69-86,115,377-402,621-622,624,626,783-799,816-818,820,822,824-825,828,837,921-938,946-947,949-953,983
+apps/sim/test/engine.test.ts
+  s_2cca0dc321ad0c::t_b18dd6ef87e04e 162,164-179
+  s_2cca0dc321ad0c::t_869ac3f9c0397a 163
+world/templates/characters/grumpy.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_903175edd5eb99 96,278,301-303,333-338,364,625,651-654,720,757-763,769,780,784,798-804,806,840
+  s_2cca0dc321ad0c::t_0763554800eaec 15,25,124-125,896-917,919-931,933-941
+  s_2cca0dc321ad0c::t_f322612a1b3498 23,26,120-123,151,209-255,375,381,894-895,942-993
+  s_2cca0dc321ad0c::t_bfd1cfb66f1fe1 58-74
+  s_2cca0dc321ad0c::t_8005e19457fc34 41
+  s_2cca0dc321ad0c::t_abf2a8c1e29eaa 629,633,637,642,646
+  s_2cca0dc321ad0c::t_dba048f4733dfb 918,932
+  s_2cca0dc321ad0c::t_10f8acfc490e4a 128
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_9e008384849ca1 34,650-674,677-686
+  s_2cca0dc321ad0c::t_78d784d53b9186 647
+  s_2cca0dc321ad0c::t_018265b9d0d88b 675-676
+  s_2cca0dc321ad0c::t_f322612a1b3498 61,577-593,595,597-606,608-611,613-616,618-622,649
+  s_2cca0dc321ad0c::t_4128070fec56cf 594,596,607,612,617,623-646,648
+  s_2cca0dc321ad0c::t_42ea0fcf900cdd 46,62,364
+package.json
+  s_2cca0dc321ad0c::t_82c6a5f9e26805 16
+packages/shared/test/world.test.ts
+  s_2cca0dc321ad0c::t_a5252d83680ad0 5-6,89-102
+  s_2cca0dc321ad0c::t_907592d92ac023 29
+  s_2cca0dc321ad0c::t_de5a50dabde5a3 103
+world/templates/residents/artist-neighbor.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-21
+packages/shared/src/node.ts
+  s_2cca0dc321ad0c::t_06c9b672c8bc34 1-12,14-104
+  s_2cca0dc321ad0c::t_52f682640aee30 13
+world/templates/residents/cafe-owner.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-21
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_10f8acfc490e4a 548-563,565-575,584
+  s_2cca0dc321ad0c::t_765f9fb10f8487 4,19,68,108-114,206-207,228-229,269,318-319,333-336,338-340,350-354,426-433,435,447-451,453-454,666
+  s_2cca0dc321ad0c::t_8005e19457fc34 152-164,168,462
+  s_2cca0dc321ad0c::t_dba048f4733dfb 529,564
+  s_2cca0dc321ad0c::t_f322612a1b3498 69-71,205,251-252,258-259,321,328,487-489,493-497,499-504
+  s_2cca0dc321ad0c::t_0763554800eaec 64-67,174-176,208-209,253-257,296-299,505-528,530-546
+  s_2cca0dc321ad0c::t_c44075f6195ace 547
+world/templates/characters/cheerful.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+world/templates/residents/gardener.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-21
+packages/shared/package.json
+  s_2cca0dc321ad0c::t_c0a3ff4d246313 7-8
+world/templates/characters/artist.md
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-14
+README.md
+  s_2cca0dc321ad0c::t_1d67101174d1fd 15,17,25,27,168,189,192,195,197,200-202,261-263,295,321,323,326
+  s_2cca0dc321ad0c::t_3f97a131606106 220,222-225,298
+  s_2cca0dc321ad0c::t_1bfcc9515d3fde 268
+  s_2cca0dc321ad0c::t_83d1d0abf45ef5 150,172,175-179,181,183,187-188,199,204,206-210,212,214,216-219,221,230-235,240,242-245,249,251,253,255,267,269,271,273-275,279-293,297,299-303,309
+  s_2cca0dc321ad0c::t_9c7ae72798b80c 3,7-14,16,18-24,26,28-90,92-149,151-167,270,314-315,333,335
+  s_2cca0dc321ad0c::t_c813adfe1ada3f 91
+  s_2cca0dc321ad0c::t_4753420ca524f5 327
+apps/brain/src/routine.ts
+  s_2cca0dc321ad0c::t_f322612a1b3498 41,58-65,77
+  s_2cca0dc321ad0c::t_0763554800eaec 14,91-96,100,104,108,115-124
+world/templates/residents/librarian.md
+  s_2cca0dc321ad0c::t_492380be87f5ec 5
+  s_2cca0dc321ad0c::t_f713ce494c2cd6 1-4,6-21
+apps/sim/src/engine.ts
+  s_2cca0dc321ad0c::t_4322c3ea278b6c 117-118,122-123,129-130,132,134,139-140,142-145,150
+  s_2cca0dc321ad0c::t_58b5d6580504f4 13,161,179
+  s_2cca0dc321ad0c::t_c20e4aedd6990b 62-66,141,155,164
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_3608d73a096a7c 550-565
+  s_2cca0dc321ad0c::t_e15d910a5b41f8 539-549
+  s_2cca0dc321ad0c::t_10f8acfc490e4a 327,571-574
+  s_2cca0dc321ad0c::t_a5d5e0d141e969 35,217
+  s_2cca0dc321ad0c::t_99f98c4aa46eaf 18,341,730
+  s_2cca0dc321ad0c::t_00cf4f89ef4c41 218
+apps/sim/src/setup.ts
+  s_2cca0dc321ad0c::t_b3fac3237ee72a 16,19-20,249-256,314-328
+  s_2cca0dc321ad0c::t_8987efb786b8e9 1-15,17-18,21-248,257-313,329-380
+apps/brain/src/sim-client.ts
+  s_2cca0dc321ad0c::t_f322612a1b3498 16,65-66
+  s_2cca0dc321ad0c::t_0763554800eaec 14,67-71
+  s_2cca0dc321ad0c::t_c2eefc59a6df4c 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "076a32b4afc680c921ae4974e2b563b0fa51c346",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
