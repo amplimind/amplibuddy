@@ -1,0 +1,51 @@
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_b4bda376ae2c4c 271-278
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_b4bda376ae2c4c 207
+.env.example
+  s_2cca0dc321ad0c::t_be4f6df16d1e71 47-48
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 15-16
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 24-33,561-568
+  s_2cca0dc321ad0c::t_bb6300527342eb 569-575
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_bb6300527342eb 5,277-289,294
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 144-153,595-605,607-621
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_b4bda376ae2c4c 12,395-396
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_bb6300527342eb 241,312-316
+tools/searxng/settings.yml
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 9-12
+packages/shared/src/world.ts
+  s_2cca0dc321ad0c::t_b4bda376ae2c4c 192
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 26-27
+  s_2cca0dc321ad0c::t_be4f6df16d1e71 97-98
+README.md
+  s_2cca0dc321ad0c::t_f1ab26c0c5cf01 46
+  s_2cca0dc321ad0c::t_be4f6df16d1e71 105
+apps/sim/test/mail.test.ts
+  s_2cca0dc321ad0c::t_bb6300527342eb 488-492
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "179feeb3eb6d85da0c661699e16bd1653225a8fc",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
