@@ -1,0 +1,113 @@
+.env.example
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 13-17
+  s_2cca0dc321ad0c::t_f49d7ecebd66dc 18-20
+  s_2cca0dc321ad0c::t_f2cbbb80e2fde6 21
+packages/shared/src/world.ts
+  s_2cca0dc321ad0c::t_8e3ea6c852505c 320-339
+  s_2cca0dc321ad0c::t_00525c4aa0b20d 192
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_4c6f98614d5832 820-871
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_4c6f98614d5832 3,47
+apps/sim/src/config.ts
+  s_2cca0dc321ad0c::t_8e3ea6c852505c 4,46-53
+README.md
+  s_2cca0dc321ad0c::t_f49d7ecebd66dc 42,46
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 41
+  s_2cca0dc321ad0c::t_f2cbbb80e2fde6 37-40,43-45
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_ce59c5c3b5fc88 51,63,166,438-465
+  s_2cca0dc321ad0c::t_e224879252d48c 4-12,340,343-357
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 27,526-528,532-539,541-550
+  s_2cca0dc321ad0c::t_e6f4b21a710663 25,466-479
+  s_2cca0dc321ad0c::t_96f0f465f22299 495-525
+  s_2cca0dc321ad0c::t_d6d7523941c38b 480-494,551
+  s_2cca0dc321ad0c::t_2ee37d6584de8c 398
+  s_2cca0dc321ad0c::t_b3fe529b36d534 529-531,540
+  s_2cca0dc321ad0c::t_6da378cd089d48 3
+tools/searxng/settings.yml
+  s_2cca0dc321ad0c::t_12e6e375d6c714 1-13
+apps/sim/src/sim.ts
+  s_2cca0dc321ad0c::t_1606406e0174b1 56
+packages/shared/src/mail.ts
+  s_2cca0dc321ad0c::t_00525c4aa0b20d 19-20,46-47,55-57,67-68
+apps/brain/src/search.ts
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 5-6,8,18,39-70,73-117
+  s_2cca0dc321ad0c::t_501086d7620388 1-4,7,9-17,19-38,118-167
+  s_2cca0dc321ad0c::t_b3fe529b36d534 71-72
+world/neighbors/hedda.md
+  s_2cca0dc321ad0c::t_8e3ea6c852505c 5-7
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_00525c4aa0b20d 106-107,136-145,150,277-278
+  s_2cca0dc321ad0c::t_8e3ea6c852505c 92-93
+package.json
+  s_2cca0dc321ad0c::t_12e6e375d6c714 18-20
+apps/web/src/town.ts
+  s_2cca0dc321ad0c::t_cf0c017ba58323 7,836
+  s_2cca0dc321ad0c::t_4c6f98614d5832 870-877
+apps/brain/src/main.ts
+  s_2cca0dc321ad0c::t_f49d7ecebd66dc 11
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_e224879252d48c 4,115,129-137
+  s_2cca0dc321ad0c::t_f2cbbb80e2fde6 18-21,23,33,37,73,77-86,89,91-92
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 25,28,76
+  s_2cca0dc321ad0c::t_f49d7ecebd66dc 22,24,26-27,29-32,34-36,74
+  s_2cca0dc321ad0c::t_cd79181a1e7bc0 87-88,90
+  s_2cca0dc321ad0c::t_96f0f465f22299 7,70-72,75
+  s_2cca0dc321ad0c::t_d9e0143d085ab4 17
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_1606406e0174b1 259-265,275,545-548,728
+  s_2cca0dc321ad0c::t_af903112786d58 630
+apps/brain/src/llm.ts
+  s_2cca0dc321ad0c::t_96f0f465f22299 210-234
+  s_2cca0dc321ad0c::t_c9459934e27a12 209
+apps/web/src/AskCard.tsx
+  s_2cca0dc321ad0c::t_297bee2d43d514 1-76
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_96f0f465f22299 26,601-610
+  s_2cca0dc321ad0c::t_a1288fffb4ff2f 65,590-600
+  s_2cca0dc321ad0c::t_f49d7ecebd66dc 163-164,454,563-589,611
+  s_2cca0dc321ad0c::t_af903112786d58 317
+  s_2cca0dc321ad0c::t_ce59c5c3b5fc88 408-411
+  s_2cca0dc321ad0c::t_f2cbbb80e2fde6 615
+  s_2cca0dc321ad0c::t_e224879252d48c 5,255-257
+  s_2cca0dc321ad0c::t_4846ca0cbc232c 612
+apps/web/src/Mailbox.tsx
+  s_2cca0dc321ad0c::t_4c6f98614d5832 28,36,92
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_4c6f98614d5832 189-190,221-223
+  s_2cca0dc321ad0c::t_af903112786d58 105
+apps/brain/src/routine.ts
+  s_2cca0dc321ad0c::t_e224879252d48c 65-66
+  s_2cca0dc321ad0c::t_ce59c5c3b5fc88 6,74-78
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_1606406e0174b1 130,191-193,494,498-500,511-512,649,651-655,657-685
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_e224879252d48c 12,15,271-276
+  s_2cca0dc321ad0c::t_d6d7523941c38b 22-23,155-177,237,245,311,391,395-401,403-407,632,683,779
+  s_2cca0dc321ad0c::t_ce59c5c3b5fc88 89-91,98-100,282-283,286,288-289,293,508,757-760,762,772-773
+  s_2cca0dc321ad0c::t_e6f4b21a710663 131-154,304,390
+apps/sim/test/mail.test.ts
+  s_2cca0dc321ad0c::t_1606406e0174b1 489-516
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e1fb9c624fb89a6592dd7f71013ab17a0fc7cb0",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
