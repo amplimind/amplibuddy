@@ -1,4 +1,4 @@
-import type { BookWithText, EventBody, Persona, WorldEvent, WorldSnapshot } from '@ampli-world/shared';
+import type { BookWithText, EventBody, Neighbor, Persona, WorldEvent, WorldSnapshot } from '@ampli-world/shared';
 import { Engine, initialState } from './engine.ts';
 import type { Store } from './store.ts';
 
@@ -34,11 +34,13 @@ export class Sim {
     readonly books: Map<string, BookWithText>,
     readonly persona: Persona,
     readonly minutesPerSecond: number,
+    readonly neighbors: Neighbor[] = [],
   ) {
     this.engine = new Engine(
       store.loadState() ?? initialState(),
       (body, simTime) => this.record(body, simTime),
       (id) => books.get(id)?.title,
+      minutesPerSecond,
     );
   }
 
@@ -47,6 +49,7 @@ export class Sim {
       simTime: this.engine.simTime,
       minutesPerSecond: this.minutesPerSecond,
       persona: this.persona,
+      neighbors: this.neighbors,
       agent: this.engine.agent,
       mailWaiting: this.store.mailStats().waiting,
       latestArtId: this.store.latestArtId(),

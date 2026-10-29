@@ -16,7 +16,27 @@ Open http://localhost:5173.
 
 By default a sim day lasts 4 real hours. While developing, set `SIM_MINUTES_PER_SECOND=1` in `.env` to see a whole day in 24 minutes.
 
-Without an `OPENROUTER_API_KEY`, the brain runs **offline**: simple rules and scoring, canned thoughts, no LLM calls. That's enough to work on the world and the UI.
+**Local models** (free, nothing leaves your machine): point the brain at any OpenAI-compatible server, e.g. [Ollama](https://ollama.com):
+
+```bash
+ollama pull gemma4:12b
+# .env
+LLM_BASE_URL=http://localhost:11434/v1
+# BRAIN_MODEL=gemma4:12b   (the local default; one model does everything)
+```
+
+Locally one model does decisions, replies, diary and art: one download, one model in memory. Measured on an M2 Max with the real prompts:
+
+| Model | Decisions | Sees doodles | Size | Verdict |
+|---|---|---|---|---|
+| `gemma4:12b` | 3/3, ~4 s | yes | 7.6 GB | **default**: does everything, fits 16 GB Macs |
+| `qwen3.8:27b` | 3/3, ~17 s | yes | 18 GB | better writing, slow |
+| `ornith:35b` | 3/3, ~1.3 s | no | 21 GB | fast, but can't see doodles |
+| `qwen3:14b` | 0/3 | no | 9 GB | doesn't make the tool calls |
+
+Thinking is switched off (`reasoning_effort: none`). A model that answers in prose instead of calling the tool gets one retry, and a model that can't see images gets the letter without the drawing (and is told so). All cost limits are ignored locally, the internet café stays closed (it needs OpenRouter's web plugin), and your OpenRouter key is never sent to other servers.
+
+Without an `OPENROUTER_API_KEY` (and no `LLM_BASE_URL`), the brain runs **offline**: simple rules and scoring, canned thoughts, no LLM calls. That's enough to work on the world and the UI.
 
 Requires Node ≥ 22.13 (uses the built-in `node:sqlite`; Node prints an `ExperimentalWarning` for it, which is harmless).
 
@@ -43,6 +63,8 @@ Three processes, on purpose (same split as Pino):
 
 **Reading is real**: when Ampli reads, the model gets the full book text from `world/library/` and writes a takeaway, which feeds into that night's notebook rewrite.
 
+**Company**: a fourth need that only people fill: letters, and notes Ampli pins on the notice board inviting colleagues to write. Nobody else lives in town, and the prompt says so, so Ampli doesn't imagine strangers. Neighbours (other AI characters with their own persona and notes) live in `world/neighbors/*.md`. Hedda the hedgehog is there but `active: false` for now.
+
 **Doodles and the art studio**: letters can carry a doodle drawn in the browser. The model really looks at it, both for the check and when replying, and writes a short caption that can reach the diary. In the studio, Ampli paints by writing SVG (shapes and colours as code, no image generator). The sim rejects any SVG with scripts, event handlers or external references and serves SVGs with a `default-src 'none'` CSP. The newest painting stands on the easel; all of them are in the Art tab.
 
 **The internet café is real too**: Ampli picks something it wants to look up (often prompted by a book or a letter). The query is checked by the moderation model before it appears anywhere. OpenRouter's web plugin then returns 3 pages, and the model writes a short note. The feed shows the query, the note (checked again) and the source links. Web pages are treated as information only: the search call has no tools, and only http(s) links reach the page.
@@ -61,7 +83,9 @@ Three processes, on purpose (same split as Pino):
 
 | Variable | Default | Notes |
 |---|---|---|
-| `OPENROUTER_API_KEY` | – | Empty = offline mode |
+| `OPENROUTER_API_KEY` | – | Empty = offline mode (unless `LLM_BASE_URL` points to a local server) |
+| `LLM_BASE_URL` | OpenRouter | Any OpenAI-compatible server, e.g. `http://localhost:11434/v1` for Ollama |
+| `VISION_MODEL` | – | Model for calls with images (doodles); needed if your brain model can't see |
 | `BRAIN_MODEL` | `anthropic/claude-haiku-5.5` | Frequent decisions and book takeaways |
 | `REFLECT_MODEL` | `anthropic/claude-sonnet-5.5` | Nightly diary + notebook rewrite |
 | `LLM_REASONING` | `off` | Hidden thinking for reasoning models (`off`/`low`/`medium`/`high`). Some models, e.g. DeepSeek V4.1 Flash, think by default, which costs more and can cut off the tool call |
@@ -69,6 +93,8 @@ Three processes, on purpose (same split as Pino):
 | `WEB_SEARCHES_PER_DAY` | `20` | Daily cap (UTC). Each search costs about $0.0075, so the default cap is at most ~$0.15/day |
 | `WEB_EXCLUDE_DOMAINS` | – | Comma-separated domains Ampli never gets results from (`reddit.com,*.example.com`) |
 | `ART_PER_DAY` | `10` | Artworks per day (UTC) in the art studio, made with `REFLECT_MODEL` |
+| `NOTES_PER_DAY` | `4` | Notes Ampli may pin on the notice board per day |
+| `CHATS_PER_DAY` | `12` | Chats with neighbours per day (only with an active neighbour) |
 | `LLM_DAILY_BUDGET_USD` | `2` | Hard cap per UTC day, then offline. Uses OpenRouter's reported `usage.cost` |
 | `LLM_MAX_CALLS_PER_HOUR` | `120` | Guards against runaway loops |
 | `SIM_MINUTES_PER_SECOND` | `0.1` | 0.1 = a sim day lasts 4 real hours. `1` = 24 minutes (handy while developing). `0.0166667` = real time |

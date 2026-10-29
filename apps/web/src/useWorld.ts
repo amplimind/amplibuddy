@@ -12,6 +12,8 @@ export interface LiveSnapshot {
 export interface Bubble {
   text: string;
   receivedAt: number;
+  /** Who is speaking: 'ampli' (default) or a neighbour id. */
+  speaker?: string;
 }
 
 async function getJson<T>(path: string): Promise<T> {
@@ -66,6 +68,10 @@ export function useWorld() {
       setEvents((prev) => mergeEvents(prev, [event]));
       if (event.type === 'thought') bubble.current = { text: event.data.text, receivedAt: performance.now() };
       if (event.type === 'reading') bubble.current = { text: event.data.takeaway, receivedAt: performance.now() };
+      if (event.type === 'chat_line') {
+        bubble.current = { text: event.data.text, receivedAt: performance.now(), speaker: event.data.speaker };
+        if (event.data.llm) refreshUsage();
+      }
       if (event.type === 'artwork_created') {
         setArtVersion((v) => v + 1);
         bubble.current = { text: `I made something: “${event.data.title}”`, receivedAt: performance.now() };

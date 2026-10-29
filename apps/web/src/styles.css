@@ -9,6 +9,7 @@
   --energy: #f2b544;
   --satiety: #7bb661;
   --fun: #6aa6d6;
+  --social: #c77dba;
   --radius: 14px;
   color-scheme: light;
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -160,7 +161,7 @@ p {
 
 .need {
   display: grid;
-  grid-template-columns: 56px 1fr 28px;
+  grid-template-columns: 64px 1fr 28px;
   align-items: center;
   gap: 8px;
   font-size: 13px;
@@ -778,4 +779,41 @@ img.admin-art {
   border-radius: 8px;
   border: 1px solid var(--line);
   margin: 4px 0 8px;
+}
+
+/* --- Chats --- */
+
+.feed-chat {
+  padding: 6px 12px;
+  border-radius: 12px;
+  max-width: 88%;
+}
+
+.feed-chat p {
+  margin: 0;
+}
+
+.chat-ampli {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.chat-neighbor {
+  align-self: flex-end;
+  background: #f6eaf3;
+  border: 1px solid #ead2e4;
+}
+
+.pinned-note {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff6d6;
+  border: 1px solid #f0dc94;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pinned-note p {
+  margin: 0 0 4px;
 }

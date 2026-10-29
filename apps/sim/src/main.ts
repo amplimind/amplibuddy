@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { VISITOR_RETENTION_DAYS, formatClock } from '@ampli-world/shared';
-import { config, loadPersona } from './config.ts';
+import { config, loadNeighbors, loadPersona } from './config.ts';
 import { createApp } from './http.ts';
 import { loadLibrary } from './library.ts';
 import { Sim } from './sim.ts';
@@ -13,7 +13,7 @@ const RETENTION_SWEEP_MS = 3_600_000;
 const store = new Store(config.dbFile);
 const books = loadLibrary(config.libraryDir);
 const persona = loadPersona();
-const sim = new Sim(store, books, persona, config.minutesPerSecond);
+const sim = new Sim(store, books, persona, config.minutesPerSecond, loadNeighbors());
 
 if (!config.brainToken) {
   console.warn('[sim] BRAIN_TOKEN is empty: anyone who can reach this port can steer the character.');

@@ -5,10 +5,12 @@ import {
   MAX_LETTER_CHARS,
   MAX_NAME_CHARS,
   VISITOR_RETENTION_DAYS,
+  formatClock,
   isNight,
   type Letter,
   type LetterStatus,
   type VisitorProfile,
+  type WorldEvent,
   type WorldSnapshot,
 } from '@ampli-world/shared';
 
@@ -173,6 +175,7 @@ export function Mailbox({ snapshot, mailVersion }: { snapshot: WorldSnapshot | n
   const [me, setMe] = useState<VisitorProfile | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
+  const [note, setNote] = useState<{ text: string; simTime: number } | null>(null);
   const author = snapshot?.persona.name ?? 'Ampli';
 
   const refresh = useCallback(() => {
@@ -181,6 +184,12 @@ export function Mailbox({ snapshot, mailVersion }: { snapshot: WorldSnapshot | n
     getJson<VisitorProfile | null>('/api/me').then(setMe).catch(() => {});
     getJson<{ open: boolean }>('/api/mail/status')
       .then((s) => setOpen(s.open))
+      .catch(() => {});
+    getJson<WorldEvent[]>('/api/notes')
+      .then((notes) => {
+        const latest = notes[0];
+        setNote(latest?.type === 'note_posted' && latest.data.text ? { text: latest.data.text, simTime: latest.simTime } : null);
+      })
       .catch(() => {});
   }, []);
 
@@ -237,6 +246,12 @@ export function Mailbox({ snapshot, mailVersion }: { snapshot: WorldSnapshot | n
 
   return (
     <div className="mailbox">
+      {note && (
+        <aside className="pinned-note">
+          <span className="feed-kicker">📌 {author} pinned a note · {formatClock(note.simTime)}</span>
+          <p>“{note.text}”</p>
+        </aside>
+      )}
       <form className="letter-form" onSubmit={send}>
         <h3>Write to {author}</h3>
         {!open ? (

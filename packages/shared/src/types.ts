@@ -16,7 +16,9 @@ export type ActivityKind =
   | 'people_watch'
   | 'check_mail'
   | 'browse'
-  | 'paint';
+  | 'paint'
+  | 'chat'
+  | 'post_note';
 
 export interface Point {
   x: number;
@@ -28,6 +30,8 @@ export interface Needs {
   energy: number;
   satiety: number;
   fun: number;
+  /** Company: drains when alone, filled by chats and letters. */
+  social: number;
 }
 
 export interface Mood {
@@ -79,10 +83,19 @@ export interface Persona {
   town: string;
 }
 
+/** Another animal in town, played by its own AI persona. */
+export interface Neighbor {
+  id: string;
+  name: string;
+  species: string;
+  place: PlaceId;
+}
+
 export interface WorldSnapshot {
   simTime: number;
   minutesPerSecond: number;
   persona: Persona;
+  neighbors: Neighbor[];
   agent: AgentState;
   /** Letters in the post box, shown on the map. */
   mailWaiting: number;
@@ -118,6 +131,10 @@ export type EventBody =
       type: 'mail_read';
       data: { letterId: number; from?: string; text?: string; reply?: string; doodle?: boolean; doodleCaption?: string };
     }
+  /** One line of a conversation between Ampli and a neighbour. */
+  | { type: 'chat_line'; data: { chatId: number; speaker: string; name: string; text: string; llm?: LlmMeta } }
+  /** A note Ampli pinned on the notice board. Held notes carry no text, only `held`, so Ampli knows. */
+  | { type: 'note_posted'; data: { text?: string; held?: boolean; llm?: LlmMeta } }
   | { type: 'artwork_created'; data: { artworkId: number; title: string; caption: string; llm?: LlmMeta } }
   /** A web search at the internet café. No takeaway when the outbound check held it. */
   | { type: 'browsed'; data: { query: string; takeaway?: string; sources: WebSource[]; llm?: LlmMeta } };
@@ -172,6 +189,12 @@ export interface BrainContext {
   browsesToday: number;
   /** Artworks since 00:00 UTC, for the daily cap. */
   artToday: number;
+  /** Chats started since 00:00 UTC, for the daily cap. */
+  chatsToday: number;
+  /** Notice-board notes since 00:00 UTC, for the daily cap. */
+  notesToday: number;
+  /** Each neighbour's own notes (about Ampli and the town), keyed by neighbour id. */
+  neighborNotes: Record<string, string[]>;
 }
 
 export interface DecisionRequest {
@@ -218,6 +241,27 @@ export interface BrowseRequest {
   takeaway?: string;
   sources: WebSource[];
   /** Outbound check said no: log the search, not the takeaway. */
+  held?: boolean;
+  llm?: LlmMeta[];
+}
+
+export interface ChatLineRequest {
+  chatId: number;
+  /** 'ampli' or a neighbour id. */
+  speaker: string;
+  text: string;
+  llm?: LlmMeta;
+}
+
+export interface NeighborNotesRequest {
+  neighborId: string;
+  notes: string[];
+  llm?: LlmMeta;
+}
+
+export interface NoteRequest {
+  text: string;
+  /** Outbound check said no: don't pin it. */
   held?: boolean;
   llm?: LlmMeta[];
 }

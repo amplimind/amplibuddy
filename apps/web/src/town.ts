@@ -84,6 +84,8 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   check_mail: '📬',
   browse: '💻',
   paint: '🎨',
+  chat: '💬',
+  post_note: '📌',
 };
 
 function px(tile: number): number {
@@ -584,6 +586,42 @@ function darkness(simTime: number): number {
   return 0.5;
 }
 
+/** Hedda's spot behind the café counter, facing the tables (tile coordinates). */
+const HEDDA = { x: 33.5, y: 3.65 };
+
+/** A hedgehog: spiky brown back, light face, looking down at the tables. */
+function drawHedgehog(ctx: CanvasRenderingContext2D, x: number, y: number, bob: number) {
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.fillStyle = '#5a3e2b';
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI + (i / 8) * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a - 0.2) * 8, Math.sin(a - 0.2) * 7 - 1);
+    ctx.lineTo(Math.cos(a) * 13, Math.sin(a) * 11 - 1);
+    ctx.lineTo(Math.cos(a + 0.2) * 8, Math.sin(a + 0.2) * 7 - 1);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#7a5235';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e8cfa8';
+  ctx.beginPath();
+  ctx.ellipse(0, 3, 6.5, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = C.ink;
+  for (const ex of [-2.5, 2.5]) {
+    ctx.beginPath();
+    ctx.arc(ex, 1.5, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 5.5, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawFox(ctx: CanvasRenderingContext2D, x: number, y: number, facing: number, sleeping: boolean, bob: number) {
   ctx.save();
   ctx.translate(x, y + bob);
@@ -793,6 +831,10 @@ export function drawFrame(
 
   updateReveal(state, { x: pos.x + 0.5, y: pos.y + 0.5 }, now);
   drawEasel(ctx, state, snapshot.latestArtId);
+  // Neighbours stand at their place during opening hours (under the roof, so visible when you look inside).
+  const hour = hourOf(simNow);
+  const heddaHere = snapshot.neighbors.some((n) => n.place === 'cafe') && hour >= 7 && hour < 21;
+  if (heddaHere) drawHedgehog(ctx, px(HEDDA.x), px(HEDDA.y), Math.sin(now / 700) * 0.6);
   drawRoofsAndLabels(ctx, state.reveal);
 
   const kind = agent.activity?.kind;
@@ -839,7 +881,8 @@ export function drawFrame(
     const age = now - bubble.receivedAt;
     if (age < BUBBLE_MS) {
       const alpha = Math.min(1, age / 300, (BUBBLE_MS - age) / 800);
-      drawBubble(ctx, bubble.text, x, y, alpha);
+      const atNeighbor = bubble.speaker && bubble.speaker !== 'ampli';
+      drawBubble(ctx, bubble.text, atNeighbor ? px(HEDDA.x) : x, atNeighbor ? px(HEDDA.y) : y, alpha);
     }
   }
 }

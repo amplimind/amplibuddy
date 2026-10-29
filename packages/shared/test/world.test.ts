@@ -57,10 +57,12 @@ test('sleep lasts until 07:00', () => {
 });
 
 test('mood: lowest need dominates the label', () => {
-  assert.equal(moodFrom({ energy: 10, satiety: 90, fun: 90 }, 0).label, 'sleepy');
-  assert.equal(moodFrom({ energy: 90, satiety: 15, fun: 90 }, 0).label, 'hungry and a bit grumpy');
-  assert.equal(moodFrom({ energy: 95, satiety: 95, fun: 95 }, 0).label, 'cheerful');
-  assert.equal(moodFrom({ energy: 50, satiety: 50, fun: 50 }, 0.2).label, 'content');
+  const ok = { energy: 90, satiety: 90, fun: 90, social: 90 };
+  assert.equal(moodFrom({ ...ok, energy: 10 }, 0).label, 'sleepy');
+  assert.equal(moodFrom({ ...ok, satiety: 15 }, 0).label, 'hungry and a bit grumpy');
+  assert.equal(moodFrom({ ...ok, social: 10 }, 0).label, 'lonely');
+  assert.equal(moodFrom({ energy: 95, satiety: 95, fun: 95, social: 95 }, 0).label, 'cheerful');
+  assert.equal(moodFrom({ energy: 50, satiety: 50, fun: 50, social: 50 }, 0.2).label, 'content');
 });
 
 test('cleanSvg accepts plain drawings and rejects anything active or external', () => {

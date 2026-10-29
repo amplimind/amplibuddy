@@ -4,11 +4,14 @@ import type {
   BrainLetter,
   BrainContext,
   BrowseRequest,
+  ChatLineRequest,
   CheckLetter,
   DecisionRequest,
   DiaryRequest,
   MailReplyRequest,
   MailVerdictRequest,
+  NeighborNotesRequest,
+  NoteRequest,
   ReadingRequest,
   WorldEvent,
 } from '@ampli-world/shared';
@@ -55,6 +58,18 @@ export class SimClient {
 
   diary(body: DiaryRequest): Promise<unknown> {
     return this.request('POST', '/api/brain/diary', body);
+  }
+
+  note(body: NoteRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/note', body);
+  }
+
+  chatLine(body: ChatLineRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/chat-line', body);
+  }
+
+  neighborNotes(body: NeighborNotesRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/neighbor-notes', body);
   }
 
   art(body: ArtworkRequest): Promise<unknown> {

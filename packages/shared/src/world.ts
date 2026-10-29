@@ -6,8 +6,11 @@ import type { ActivityKind, Needs, PlaceId, Point } from './types.ts';
 export const MAP_WIDTH = 40;
 export const MAP_HEIGHT = 24;
 export const MAIN_STREET_Y = 12;
-/** Sim minutes it takes to walk one tile. */
-export const MINUTES_PER_TILE = 1.5;
+/**
+ * Walking pace on screen, in tiles per real second. Deliberately independent of
+ * the sim speed: at any speed a walk looks like walking, only the clock differs.
+ */
+export const WALK_TILES_PER_SECOND = 2.5;
 /** Max length of a web search query. */
 export const MAX_QUERY_CHARS = 120;
 
@@ -37,7 +40,7 @@ export const PLACES: Record<PlaceId, PlaceDef> = {
     area: { x: 30, y: 3, w: 7, h: 6 },
     door: { x: 33, y: 9 },
     spot: { x: 33, y: 6 }, // a table by the window
-    description: 'Warm pastries, strong coffee, a table by the window.',
+    description: 'A self-service kiosk: warm pastries, strong coffee, a table by the window.',
   },
   library: {
     id: 'library',
@@ -77,7 +80,7 @@ export const PLACES: Record<PlaceId, PlaceDef> = {
     area: { x: 16, y: 9, w: 9, h: 7 },
     door: { x: 20, y: MAIN_STREET_Y },
     spot: { x: 20, y: 14 },
-    description: 'The middle of town. A fountain, and people passing through.',
+    description: 'The middle of town: a fountain, the post box and a notice board where colleagues can read notes.',
   },
 };
 
@@ -86,7 +89,7 @@ export const PLACE_IDS = Object.keys(PLACES) as PlaceId[];
 /** Need change per sim hour. Activities replace these defaults while they run. */
 export type Rates = Needs;
 
-export const IDLE_RATES: Rates = { energy: -4, satiety: -6, fun: -8 };
+export const IDLE_RATES: Rates = { energy: -4, satiety: -6, fun: -8, social: -5 };
 
 export interface ActivityDef {
   kind: ActivityKind;
@@ -107,7 +110,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'sleeping',
     description: 'Go to bed for the night (until about 07:00).',
     minutes: 0,
-    rates: { energy: 14, satiety: -2, fun: 0 },
+    rates: { energy: 14, satiety: -2, fun: 0, social: -1 },
   },
   nap: {
     kind: 'nap',
@@ -115,7 +118,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'napping',
     description: 'A short nap at home.',
     minutes: 60,
-    rates: { energy: 12, satiety: -3, fun: 0 },
+    rates: { energy: 12, satiety: -3, fun: 0, social: -2 },
   },
   eat: {
     kind: 'eat',
@@ -123,7 +126,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'eating',
     description: 'Have a proper meal at the café.',
     minutes: 30,
-    rates: { energy: 0, satiety: 130, fun: 6 },
+    rates: { energy: 0, satiety: 130, fun: 6, social: 0 },
   },
   coffee: {
     kind: 'coffee',
@@ -131,7 +134,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'having a coffee',
     description: 'A quick coffee. Wakes you up a bit.',
     minutes: 20,
-    rates: { energy: 30, satiety: 0, fun: 8 },
+    rates: { energy: 30, satiety: 0, fun: 8, social: 0 },
   },
   stroll: {
     kind: 'stroll',
@@ -139,39 +142,39 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'strolling through the park',
     description: 'Wander around the park and the pond.',
     minutes: 45,
-    rates: { energy: -6, satiety: -6, fun: 24 },
+    rates: { energy: -6, satiety: -6, fun: 24, social: -3 },
   },
   think: {
     kind: 'think',
     place: 'park',
     verb: 'sitting on the bench, thinking',
-    description: 'Sit on the park bench and think things over.',
+    description: 'Sit on the park bench and think through one of your open questions.',
     minutes: 30,
-    rates: { energy: -2, satiety: -4, fun: 8 },
+    rates: { energy: -2, satiety: -4, fun: 8, social: -4 },
   },
   read: {
     kind: 'read',
     place: 'library',
     verb: 'reading',
-    description: 'Read one of the books in the library (pick a book_id).',
+    description: 'Learn something: read one of the books in the library (pick a book_id).',
     minutes: 60,
-    rates: { energy: -3, satiety: -4, fun: 18 },
+    rates: { energy: -3, satiety: -4, fun: 18, social: -4 },
   },
   people_watch: {
     kind: 'people_watch',
     place: 'plaza',
-    verb: 'watching people at the plaza',
-    description: 'Sit by the fountain and watch the town go by.',
+    verb: 'sitting by the fountain',
+    description: 'Sit by the fountain for a while: water, birds, the light on the plaza.',
     minutes: 30,
-    rates: { energy: -3, satiety: -5, fun: 12 },
+    rates: { energy: -3, satiety: -5, fun: 12, social: 0 },
   },
   browse: {
     kind: 'browse',
     place: 'netcafe',
     verb: 'browsing the internet',
-    description: 'Look something up on the real internet at the internet café (give a search query).',
+    description: 'Find something out on the real internet at the internet café (give a search query).',
     minutes: 45,
-    rates: { energy: -4, satiety: -5, fun: 20 },
+    rates: { energy: -4, satiety: -5, fun: 20, social: -2 },
   },
   paint: {
     kind: 'paint',
@@ -179,7 +182,24 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'painting in the studio',
     description: 'Make an artwork at your art studio, about whatever is on your mind.',
     minutes: 60,
-    rates: { energy: -4, satiety: -5, fun: 22 },
+    rates: { energy: -4, satiety: -5, fun: 22, social: -3 },
+  },
+  post_note: {
+    kind: 'post_note',
+    place: 'plaza',
+    verb: 'pinning a note to the notice board',
+    description:
+      'Write a short note to the colleagues who watch you and pin it on the notice board at the plaza. They can answer with a letter.',
+    minutes: 20,
+    rates: { energy: -2, satiety: -3, fun: 8, social: 30 },
+  },
+  chat: {
+    kind: 'chat',
+    place: 'cafe',
+    verb: 'chatting with Hedda at the counter',
+    description: 'Have a chat with Hedda, the hedgehog who runs the café (07:00-21:00).',
+    minutes: 30,
+    rates: { energy: -2, satiety: -2, fun: 14, social: 70 },
   },
   check_mail: {
     kind: 'check_mail',
@@ -187,7 +207,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     verb: 'reading letters at the post box',
     description: 'Go to the post box at the plaza and read the letters colleagues left you.',
     minutes: 30,
-    rates: { energy: -2, satiety: -4, fun: 14 },
+    rates: { energy: -2, satiety: -4, fun: 14, social: 40 },
   },
 };
 
@@ -242,8 +262,9 @@ export function pointAlong(path: Point[], t: number): Point {
   return { ...path[path.length - 1]! };
 }
 
-export function walkMinutes(from: PlaceId, to: PlaceId): number {
-  return pathLength(pathBetween(from, to)) * MINUTES_PER_TILE;
+/** Sim minutes a walk takes, given the sim speed (sim minutes per real second). */
+export function walkMinutes(from: PlaceId, to: PlaceId, minutesPerSecond: number): number {
+  return (pathLength(pathBetween(from, to)) / WALK_TILES_PER_SECOND) * minutesPerSecond;
 }
 
 // --- Time ------------------------------------------------------------------

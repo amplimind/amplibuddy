@@ -27,7 +27,7 @@ export const START_TIME = 7 * 60;
 const BOOST_DECAY_PER_HOUR = 0.05;
 
 export function initialState(): EngineState {
-  const needs = { energy: 85, satiety: 55, fun: 60 };
+  const needs = { energy: 85, satiety: 55, fun: 60, social: 60 };
   return {
     simTime: START_TIME,
     agent: {
@@ -56,9 +56,27 @@ export class Engine {
     state: EngineState,
     private readonly emit: Emit,
     private readonly bookTitle: (id: string) => string | undefined = () => undefined,
+    /** Sim speed; walks are timed so they look the same at any speed. */
+    private readonly minutesPerSecond = 1,
   ) {
     this.simTime = state.simTime;
     this.agent = state.agent;
+    // Worlds saved before the social need existed.
+    this.agent.needs.social ??= 60;
+    this.retimeWalk();
+  }
+
+  /**
+   * A walk saved at a different sim speed would crawl or race after a restart.
+   * Keep its progress, re-time the rest for the current speed.
+   */
+  private retimeWalk(): void {
+    const walk = this.agent.walk;
+    if (!walk) return;
+    const duration = walkMinutes(walk.from, walk.to, this.minutesPerSecond);
+    const progress = Math.min(1, Math.max(0, (this.simTime - walk.startedAt) / (walk.endsAt - walk.startedAt)));
+    walk.startedAt = this.simTime - progress * duration;
+    walk.endsAt = walk.startedAt + duration;
   }
 
   get idle(): boolean {
@@ -103,7 +121,7 @@ export class Engine {
         to: def.place,
         path: pathBetween(from, def.place),
         startedAt: this.simTime,
-        endsAt: this.simTime + walkMinutes(from, def.place),
+        endsAt: this.simTime + walkMinutes(from, def.place, this.minutesPerSecond),
       };
       this.emit({ type: 'walk_started', data: { from, to: def.place } }, this.simTime);
     }
@@ -161,6 +179,7 @@ export class Engine {
     n.energy = clampNeed(n.energy + rates.energy * hours);
     n.satiety = clampNeed(n.satiety + rates.satiety * hours);
     n.fun = clampNeed(n.fun + rates.fun * hours);
+    n.social = clampNeed(n.social + rates.social * hours);
 
     const decay = BOOST_DECAY_PER_HOUR * hours;
     const b = this.agent.moodBoost;

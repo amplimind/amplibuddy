@@ -440,3 +440,49 @@ test('held artworks stay hidden until an admin approves them', async () => {
   assert.equal((await t.get<Artwork[]>('/api/art')).length, 1);
   assert.equal((await t.app.request(`/api/art/${art.id}.svg`)).status, 200);
 });
+
+// --- Neighbours -----------------------------------------------------------------------------
+
+test('chat lines resolve speaker names; neighbour notes are stored per neighbour', async () => {
+  const sim = new Sim(new Store(':memory:'), new Map(), { name: 'Ampli', species: 'fox', town: 'X' }, 1, [
+    { id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe' },
+  ]);
+  const app = createApp(sim, { brainToken: TOKEN, webDist: '/nonexistent' });
+  const brain = (path: string, body?: unknown) =>
+    app.request(path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'content-type': 'application/json', 'x-brain-token': TOKEN },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+  assert.equal((await brain('/api/brain/chat-line', { chatId: 1, speaker: 'stranger', text: 'hi' })).status, 400);
+  await brain('/api/brain/chat-line', { chatId: 1, speaker: 'ampli', text: 'Morning, Hedda.' });
+  await brain('/api/brain/chat-line', { chatId: 1, speaker: 'hedda', text: 'The usual?' });
+  const lines = (await (await app.request('/api/events')).json() as WorldEvent[]).filter((e) => e.type === 'chat_line');
+  assert.deepEqual(
+    lines.map((e) => e.type === 'chat_line' && `${e.data.name}: ${e.data.text}`),
+    ['Ampli: Morning, Hedda.', 'Hedda: The usual?'],
+  );
+
+  await brain('/api/brain/neighbor-notes', { neighborId: 'hedda', notes: ['Ampli likes strong coffee.'] });
+  const ctx = (await (await brain('/api/brain/context')).json()) as { neighborNotes: Record<string, string[]> };
+  assert.deepEqual(ctx.neighborNotes, { hedda: ['Ampli likes strong coffee.'] });
+  assert.deepEqual(sim.snapshot().neighbors.map((n) => n.name), ['Hedda']);
+});
+
+// --- Notice board ----------------------------------------------------------------------------
+
+test('notes: pinned ones are public, held ones never appear', async () => {
+  const t = setup();
+  await t.brain('/api/brain/note', { text: 'Does anyone want to tell me about their morning?' });
+  await t.brain('/api/brain/note', { text: 'something that failed the check', held: true });
+  const notes = await t.get<WorldEvent[]>('/api/notes');
+  assert.deepEqual(
+    notes.map((e) => e.type === 'note_posted' && e.data.text),
+    ['Does anyone want to tell me about their morning?'],
+  );
+  const held = (await t.get<WorldEvent[]>('/api/events')).filter((e) => e.type === 'note_posted' && e.data.held);
+  assert.deepEqual(held.map((e) => e.data), [{ held: true }], 'held notes leave a trace without their text');
+  const ctx = (await (await t.brain('/api/brain/context')).json()) as { notesToday: number };
+  assert.equal(ctx.notesToday, 2, 'held notes count towards the cap too');
+});

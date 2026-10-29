@@ -36,6 +36,9 @@ const MAX_THOUGHT_CHARS = 600;
 const MAX_DIARY_CHARS = 4000;
 const MAX_NOTES = 15;
 const MAX_NOTE_CHARS = 300;
+const MAX_CHAT_LINE_CHARS = 400;
+const MAX_BOARD_NOTE_CHARS = 400;
+const MAX_NEIGHBOR_NOTES = 8;
 /** If the brain dies mid-thought, stop showing the thought bubble after this long. */
 const THINKING_TIMEOUT_MS = 60_000;
 
@@ -304,6 +307,16 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json({ error: 'not found' }, 404);
   });
 
+  /** Ampli's notes on the notice board, newest first. */
+  app.get('/api/notes', (c) => {
+    const notes = store
+      .recentEvents(200)
+      .filter((e) => e.type === 'note_posted' && !e.data.held)
+      .reverse()
+      .slice(0, 5);
+    return c.json(notes);
+  });
+
   // --- Art studio (public) ---
 
   app.get('/api/art', (c) => c.json(store.gallery(Math.min(100, Number(c.req.query('limit')) || 60))));
@@ -369,6 +382,9 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       mail: store.mailStats(),
       browsesToday: store.countEventsToday('browsed'),
       artToday: store.countArtToday(),
+      chatsToday: store.countActivityToday('chat'),
+      notesToday: store.countEventsToday('note_posted'),
+      neighborNotes: Object.fromEntries(sim.neighbors.map((n) => [n.id, store.neighborNotes(n.id)])),
     };
     return c.json(context);
   });
@@ -503,6 +519,54 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
         ...(metas[0] ? { llm: metas[0] } : {}),
       },
     });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/brain/note', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body)) return c.json({ error: 'bad request' }, 400);
+    const metas = (Array.isArray(body.llm) ? body.llm : []).map(parseLlm).filter((m): m is LlmMeta => !!m);
+    for (const meta of metas) store.recordLlmCall('note', meta);
+    const text = shortString(body.text, MAX_BOARD_NOTE_CHARS);
+    if (!text) return c.json({ error: 'empty note' }, 400);
+    if (body.held === true) {
+      // Logged without the text: the public sees that it happened, Ampli learns it didn't get pinned.
+      sim.log({ type: 'note_posted', data: { held: true } });
+      return c.json({ ok: true, pinned: false });
+    }
+    sim.log({ type: 'note_posted', data: { text, ...(metas[0] ? { llm: metas[0] } : {}) } });
+    return c.json({ ok: true, pinned: true });
+  });
+
+  app.post('/api/brain/chat-line', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body) || typeof body.chatId !== 'number' || typeof body.speaker !== 'string') {
+      return c.json({ error: 'bad request' }, 400);
+    }
+    const name = body.speaker === 'ampli' ? sim.persona.name : sim.neighbors.find((n) => n.id === body.speaker)?.name;
+    const text = shortString(body.text, MAX_CHAT_LINE_CHARS);
+    if (!name || !text) return c.json({ error: 'unknown speaker or empty line' }, 400);
+    const llm = parseLlm(body.llm);
+    if (llm) store.recordLlmCall('chat', llm);
+    sim.log({
+      type: 'chat_line',
+      data: { chatId: body.chatId, speaker: body.speaker, name, text, ...(llm ? { llm } : {}) },
+    });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/brain/neighbor-notes', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body) || !sim.neighbors.some((n) => n.id === body.neighborId) || !Array.isArray(body.notes)) {
+      return c.json({ error: 'bad request' }, 400);
+    }
+    const llm = parseLlm(body.llm);
+    if (llm) store.recordLlmCall('chat', llm);
+    const notes = body.notes
+      .map((n) => shortString(n, MAX_NOTE_CHARS))
+      .filter((n): n is string => n !== null)
+      .slice(0, MAX_NEIGHBOR_NOTES);
+    store.setNeighborNotes(String(body.neighborId), notes);
     return c.json({ ok: true });
   });
 

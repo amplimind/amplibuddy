@@ -1,15 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { moodFrom, PLACES, type BrainContext, type BrainLetter, type LlmMeta, type Needs } from '@ampli-world/shared';
-import { clipToSentence, extractSources, extractToolArgs, parseReasoning, plainText, reasoningParam } from '../src/llm.ts';
-import { diaryDay, offlineDiary, toDecision, toReply, toVerdict } from '../src/mind.ts';
-import { decideUser, describeEvent, replyUser } from '../src/prompts.ts';
+import {
+  clipToSentence,
+  extractSources,
+  isMissedToolCall,
+  isNoVisionError,
+  extractToolArgs,
+  parseReasoning,
+  plainText,
+  reasoningFields,
+  reasoningParam,
+} from '../src/llm.ts';
+import { chatPause, diaryDay, offlineDiary, toDecision, toReply, toVerdict } from '../src/mind.ts';
+import { ampliChatUser, buildPersonaPrompt, decideUser, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 
 const meta: LlmMeta = { model: 'm', promptTokens: 1, completionTokens: 1, costUsd: 0, latencyMs: 1 };
 
 function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
-  const n = { energy: 80, satiety: 80, fun: 80, ...needs };
+  const n = { energy: 80, satiety: 80, fun: 80, social: 80, ...needs };
   return {
     snapshot: {
       simTime,
@@ -28,6 +38,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
       },
       mailWaiting: 0,
       latestArtId: null,
+      neighbors: [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', place: 'cafe' }],
     },
     idle: true,
     recentEvents: [],
@@ -41,6 +52,9 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     mail: { waiting: 0, oldestSimTime: null },
     browsesToday: 0,
     artToday: 0,
+    chatsToday: 0,
+    notesToday: 0,
+    neighborNotes: { hedda: [] },
   };
 }
 
@@ -59,8 +73,8 @@ test('sleep is only offered in the evening', () => {
 });
 
 test('utility: food matters more the hungrier you are', () => {
-  assert.ok(utility('eat', { energy: 80, satiety: 30, fun: 80 }, NOON) > utility('stroll', { energy: 80, satiety: 30, fun: 80 }, NOON));
-  assert.ok(utility('stroll', { energy: 80, satiety: 80, fun: 20 }, NOON) > utility('eat', { energy: 80, satiety: 80, fun: 20 }, NOON));
+  assert.ok(utility('eat', { energy: 80, satiety: 30, fun: 80, social: 80 }, NOON) > utility('stroll', { energy: 80, satiety: 30, fun: 80, social: 80 }, NOON));
+  assert.ok(utility('stroll', { energy: 80, satiety: 80, fun: 20, social: 80 }, NOON) > utility('eat', { energy: 80, satiety: 80, fun: 20, social: 80 }, NOON));
 });
 
 test('offline decision is always valid and picks the least-read book', () => {
@@ -101,6 +115,9 @@ test('reasoning setting maps to the OpenRouter parameter, defaulting to off', ()
   assert.equal(parseReasoning('low'), 'low');
   assert.deepEqual(reasoningParam('off'), { enabled: false });
   assert.deepEqual(reasoningParam('high'), { effort: 'high' });
+  const local = { baseUrl: 'http://localhost:11434/v1', apiKey: '', timeoutMs: 1, openRouter: false };
+  assert.deepEqual(reasoningFields(local, 'off'), { reasoning_effort: 'none' }, 'Ollama/OpenAI style');
+  assert.deepEqual(reasoningFields({ ...local, openRouter: true }, 'off'), { reasoning: { enabled: false } });
 });
 
 test('sleep after midnight belongs to the previous day', () => {
@@ -305,4 +322,92 @@ test('doodles and artworks show up in Ampli\'s own memory of events', () => {
     describeEvent({ ...base, type: 'artwork_created', data: { artworkId: 1, title: 'Pond', caption: 'Blue on blue.' } }),
     '10:00 You made an artwork, "Pond": Blue on blue.',
   );
+});
+
+// --- Neighbours ---------------------------------------------------------------------------
+
+test('chatting with Hedda: only offered with a neighbour, during café hours, under the cap', () => {
+  assert.ok(!availableActivities(NOON).includes('chat'));
+  assert.ok(availableActivities(NOON, { canChat: true }).includes('chat'));
+  assert.ok(!availableActivities(6 * 60, { canChat: true }).includes('chat'), 'café closed before 07:00');
+  assert.ok(!availableActivities(21.5 * 60, { canChat: true }).includes('chat'), 'and after 21:00');
+});
+
+test('loneliness shows up in the prompt and makes company worth seeking', () => {
+  const lonely = ctx(NOON, { social: 10 });
+  assert.match(decideUser(lonely, availableActivities(NOON, { canChat: true })), /company: low/);
+  assert.ok(utility('chat', lonely.snapshot.agent.needs, NOON) > utility('read', lonely.snapshot.agent.needs, NOON));
+});
+
+test('each side of a chat sees only its own context', () => {
+  const c = ctx(NOON);
+  c.notebook = ['Ampli secretly wants a hat.'];
+  const transcript = [{ name: 'Ampli', text: 'Morning!' }];
+  const hedda = neighborChatUser(c, 'Ampli', ['Ampli likes strong coffee.'], transcript);
+  assert.match(hedda, /Ampli likes strong coffee/);
+  assert.match(hedda, /Ampli: Morning!/);
+  assert.doesNotMatch(hedda, /secretly wants a hat/, "Hedda can't read Ampli's notebook");
+  const ampli = ampliChatUser(c, 'Hedda', transcript);
+  assert.match(ampli, /secretly wants a hat/);
+  assert.doesNotMatch(ampli, /strong coffee/, "and Ampli can't read Hedda's notes");
+});
+
+test('chat lines are paced over the activity, within 0.8-5 seconds', () => {
+  const c = ctx(NOON); // 1 sim minute per real second
+  assert.equal(chatPause(c, Date.now(), NOON + 30, 4), 5000, '30 s left for 5 gaps -> capped at 5 s');
+  assert.equal(chatPause(c, Date.now(), NOON + 2, 4), 800, 'little time left -> minimum pause');
+});
+
+// --- Loneliness without neighbours ------------------------------------------------------------
+
+test('without neighbours the prompt says so and points to letters and the notice board', () => {
+  const alone = ctx(NOON, { social: 10 });
+  alone.snapshot.neighbors = [];
+  const prompt = decideUser(alone, availableActivities(NOON, { canPostNote: true }));
+  assert.match(prompt, /Nobody else lives in Ampliville/);
+  assert.match(prompt, /notice board/);
+  assert.match(prompt, /post_note @ Plaza/);
+  assert.match(prompt, /company: low/);
+});
+
+test('with a neighbour the prompt names them', () => {
+  assert.match(decideUser(ctx(NOON), availableActivities(NOON)), /Who else lives here: Hedda the hedgehog at the Café Kiosk/);
+});
+
+test('notes are offered under the daily cap only, and count as company', () => {
+  assert.ok(!availableActivities(NOON).includes('post_note'));
+  assert.ok(availableActivities(NOON, { canPostNote: true }).includes('post_note'));
+  const lonely = ctx(NOON, { social: 10 }).snapshot.agent.needs;
+  assert.ok(utility('post_note', lonely, NOON) > utility('coffee', lonely, NOON));
+  const base = { id: 1, simTime: 600, realTime: '' } as const;
+  assert.equal(
+    describeEvent({ ...base, type: 'note_posted', data: { text: 'Hi all.' } }),
+    '10:00 You pinned a note on the notice board: "Hi all."',
+  );
+  assert.match(describeEvent({ ...base, type: 'note_posted', data: { held: true } })!, /didn't pass the content check/);
+});
+
+test('fallback triggers for flaky or text-only (local) models', () => {
+  assert.ok(isMissedToolCall(new Error('gemma4:12b did not call decide')));
+  assert.ok(!isMissedToolCall(new Error('OpenRouter 500: boom')));
+  assert.ok(isNoVisionError(new Error('400: Multimodal data provided, but model does not support multimodal requests.')));
+  assert.ok(!isNoVisionError(new Error('gemma4:12b did not call decide')));
+});
+
+test('the prompt shows what Ampli already did today, so repetition is visible', () => {
+  const c = ctx(NOON);
+  c.recentEvents = [
+    { id: 1, simTime: 8 * 60, realTime: '', type: 'activity_started', data: { kind: 'stroll', place: 'park' } },
+    { id: 2, simTime: 9 * 60, realTime: '', type: 'activity_started', data: { kind: 'coffee', place: 'cafe' } },
+    { id: 3, simTime: 10 * 60, realTime: '', type: 'activity_started', data: { kind: 'stroll', place: 'park' } },
+  ];
+  assert.match(decideUser(c, availableActivities(NOON)), /Today so far: stroll ×2, coffee\./);
+  assert.match(decideUser(ctx(NOON), availableActivities(NOON)), /Today so far: nothing yet\./);
+});
+
+test('persona prompt: generic personality text plus the world configuration from frontmatter', () => {
+  const prompt = buildPersonaPrompt('---\nname: Ampli\nspecies: small fox\ntown: Ampliville\n---\n## Identity\nYou are a small being.');
+  assert.match(prompt, /^## Identity\nYou are a small being\./);
+  assert.match(prompt, /## Your world configuration\n- Name: Ampli\n- Species: small fox\n- You live in Ampliville/);
+  assert.equal(buildPersonaPrompt('just text'), 'just text');
 });

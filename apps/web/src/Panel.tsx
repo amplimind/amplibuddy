@@ -5,6 +5,7 @@ import {
   formatTime,
   type DiaryEntry,
   type LlmMeta,
+  type Neighbor,
   type PlaceId,
   type Thought,
   type UsageToday,
@@ -104,6 +105,7 @@ export function StatusCard({ snapshot, events }: { snapshot: WorldSnapshot; even
       <NeedBar label="Energy" value={agent.needs.energy} color="var(--energy)" />
       <NeedBar label="Fed" value={agent.needs.satiety} color="var(--satiety)" />
       <NeedBar label="Fun" value={agent.needs.fun} color="var(--fun)" />
+      <NeedBar label="Company" value={agent.needs.social} color="var(--social)" />
     </section>
   );
 }
@@ -173,6 +175,28 @@ function FeedItem({ event }: { event: WorldEvent }) {
             </ul>
           )}
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
+    case 'note_posted':
+      if (event.data.held) {
+        return <li className="feed-item feed-minor">{time} wrote a note, but it didn't pass the content check</li>;
+      }
+      return (
+        <li className="feed-item pinned-note">
+          {time}
+          <p>
+            <span className="feed-kicker">📌 Pinned a note on the notice board</span>“{event.data.text}”
+          </p>
+          {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
+    case 'chat_line':
+      return (
+        <li className={`feed-item feed-chat ${event.data.speaker === 'ampli' ? 'chat-ampli' : 'chat-neighbor'}`}>
+          <span className="feed-time">
+            {formatClock(event.simTime)} · {event.data.name}
+          </span>
+          <p>“{event.data.text}”</p>
         </li>
       );
     case 'artwork_created':
@@ -263,7 +287,7 @@ export function NotebookView({ notebook, name }: { notebook: string[]; name: str
   );
 }
 
-export function HowItWorks({ name, usage }: { name: string; usage: UsageToday }) {
+export function HowItWorks({ name, usage, neighbors }: { name: string; usage: UsageToday; neighbors: Neighbor[] }) {
   return (
     <div className="how">
       <p>
@@ -319,6 +343,23 @@ export function HowItWorks({ name, usage }: { name: string; usage: UsageToday })
         the studio, {name} paints by writing SVG code: shapes, colours and gradients, chosen by the model from its mood
         and recent days. There's no image generator involved, just a language model writing a picture as text.
       </p>
+      <h3>9. Company</h3>
+      <p>
+        {name} has a fourth need: company. It drains when {name} is alone and only fills up through people: your letters,
+        and the notes {name} pins on the notice board to invite them. Nobody else lives in town, so if you want {name} to
+        feel less lonely, write.
+      </p>
+      {neighbors.map((n) => (
+        <section key={n.id}>
+          <h3>Two minds: {n.name}</h3>
+          <p>
+            {n.name} the {n.species} is a second, separate AI character with her own persona and her own notes. In a
+            conversation, every line is its own model call that only sees that speaker's context: {name}'s notebook
+            and days, or {n.name}'s notes about {name}. That's what “multi-agent” means: separate minds, each with its
+            own memory, talking through a shared channel.
+          </p>
+        </section>
+      ))}
       <h3>Things to watch for</h3>
       <ul>
         <li>How the same model makes different choices when its context changes.</li>

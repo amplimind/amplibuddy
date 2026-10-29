@@ -11,6 +11,7 @@ import {
   describeNeed,
   formatTime,
   hourOf,
+  parseFrontmatter,
   type ActivityKind,
   type BookWithText,
   type BrainContext,
@@ -26,9 +27,24 @@ const GROUND_RULES = `
 ## Ground rules
 - You are an AI character in a small simulated town. Colleagues watch your thoughts in a live feed. You know this and you are fine with it — curious about it, even.
 - Only refer to things that actually happened to you; they are listed below. Never invent people, conversations or events.
+- Only the places and neighbours named here exist. There are no strangers, customers or passers-by in town.
 - If you don't know something, say so. Being unsure is fine.
 - Write in English, first person, plain words. No emojis, no hashtags.
 `.trim();
+
+/**
+ * The persona body plus the world configuration from its frontmatter (name, species,
+ * town): the personality text stays generic, the world says who and where you are.
+ */
+export function buildPersonaPrompt(fileText: string): string {
+  const { meta, body } = parseFrontmatter(fileText);
+  const config = [
+    meta.name && `- Name: ${meta.name}`,
+    meta.species && `- Species: ${meta.species}`,
+    meta.town && `- You live in ${meta.town}, a tiny town (the places are listed in your observations).`,
+  ].filter(Boolean);
+  return config.length > 0 ? `${body}\n\n## Your world configuration\n${config.join('\n')}` : body;
+}
 
 function partOfDay(simTime: number): string {
   const h = hourOf(simTime);
@@ -71,9 +87,47 @@ export function describeEvent(e: WorldEvent): string | null {
         ? `${at} You read a letter from ${e.data.from}${drawing}${said} You replied: "${e.data.reply}"`
         : `${at} You read a letter from ${e.data.from}${drawing}${said} You didn't reply.`;
     }
+    case 'note_posted':
+      return e.data.held
+        ? `${at} You wrote a note, but it didn't pass the content check, so it's not on the notice board.`
+        : `${at} You pinned a note on the notice board: "${e.data.text}"`;
+    case 'chat_line':
+      return e.data.speaker === 'ampli'
+        ? `${at} You said: "${e.data.text}"`
+        : `${at} ${e.data.name} said: "${e.data.text}"`;
     case 'artwork_created':
       return `${at} You made an artwork, "${e.data.title}": ${e.data.caption}`;
   }
+}
+
+/**
+ * Order of the options in the decision prompt. Small (local) models tend to pick from the
+ * top, so things that feed curiosity and company come first, routine needs last.
+ */
+const OPTION_ORDER: ActivityKind[] = [
+  'read',
+  'browse',
+  'think',
+  'paint',
+  'post_note',
+  'check_mail',
+  'chat',
+  'stroll',
+  'people_watch',
+  'coffee',
+  'eat',
+  'nap',
+  'sleep',
+];
+
+/** "coffee ×2, stroll" for the current sim day, so repetition is visible to the model. */
+export function todaySoFar(ctx: BrainContext): string {
+  const day = dayOf(ctx.snapshot.simTime);
+  const counts = new Map<ActivityKind, number>();
+  for (const e of ctx.recentEvents) {
+    if (e.type === 'activity_started' && dayOf(e.simTime) === day) counts.set(e.data.kind, (counts.get(e.data.kind) ?? 0) + 1);
+  }
+  return [...counts].map(([kind, n]) => (n > 1 ? `${kind} ×${n}` : kind)).join(', ');
 }
 
 function notebookBlock(notebook: string[]): string {
@@ -123,7 +177,7 @@ export function decideSystem(persona: string): string {
 ${GROUND_RULES}
 
 ## Your job right now
-Decide what to do next. Nobody tells you what to do: choose what you actually feel like, given your body, your mood, what you remember and the time of day. Having favourite things is fine; so is trying something new.
+Decide what to do next. Nobody tells you what to do: choose what you actually feel like, given your body, your mood, what you remember and the time of day. Act like yourself: let your personality, not just your needs, drive the choice. Having favourite things is fine, but don't repeat what you just did unless your body really needs it.
 Your thought appears in the public feed, so make it a genuine, specific inner monologue (1-2 short sentences), not a description of the menu.
 Answer by calling the \`decide\` tool once.`;
 }
@@ -134,7 +188,8 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
   const n = agent.needs;
   const recent = ctx.recentEvents.map(describeEvent).filter(Boolean).slice(-15);
 
-  const options = kinds
+  const options = [...kinds]
+    .sort((a, b) => OPTION_ORDER.indexOf(a) - OPTION_ORDER.indexOf(b))
     .map((k) => {
       const a = ACTIVITIES[k];
       const minutes = k === 'sleep' ? 'until morning' : `${a.minutes} min`;
@@ -154,6 +209,15 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
   const justFinished =
     lastActivity?.type === 'activity_finished' ? `\nYou just finished ${ACTIVITIES[lastActivity.data.kind].verb}.` : '';
 
+  const neighbors = ctx.snapshot.neighbors;
+  const around =
+    neighbors.length > 0
+      ? `Who else lives here: ${neighbors.map((n) => `${n.name} the ${n.species} at the ${PLACES[n.place].name}`).join(', ')}. Nobody else.`
+      : 'Nobody else lives in Ampliville: you can\'t talk to anyone in person.';
+  const company = `\n${around} Your company comes from the colleagues who watch you: their letters in the post box, and the notes you can pin on the notice board inviting them to write.`;
+
+  const today = todaySoFar(ctx);
+
   const { waiting, oldestSimTime } = ctx.mail;
   const mail =
     waiting > 0 && oldestSimTime !== null
@@ -161,12 +225,14 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
       : '';
 
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)} — ${partOfDay(simTime)}.
-You are at ${place ? `${place.name}. ${place.description}` : 'somewhere in town'}${justFinished}${mail}
+You are at ${place ? `${place.name}. ${place.description}` : 'somewhere in town'}${justFinished}${mail}${company}
+Today so far: ${today || 'nothing yet'}.
 
 How you feel:
 - energy: ${describeNeed(n.energy)}
 - hunger: ${describeNeed(n.satiety)} (how full you are)
 - fun: ${describeNeed(n.fun)}
+- company: ${describeNeed(n.social)} (how much you've been around others)
 - mood: ${agent.mood.label}
 
 Your notebook (your long-term memory):
@@ -384,12 +450,16 @@ export const moderationTool: ToolSpec = {
   },
 };
 
-export type ModerationTarget = 'letter' | 'reply' | 'search' | 'note' | 'art';
+export type ModerationTarget = 'letter' | 'reply' | 'search' | 'note' | 'art' | 'board';
 
 const MODERATION_TARGETS: Record<ModerationTarget, { what: string; extra: string }> = {
   letter: {
     what: 'a note an employee wrote to Ampli, an AI fox character. It may come with a hand-drawn doodle (attached image); judge the drawing too',
     extra: '',
+  },
+  board: {
+    what: 'a note Ampli, an AI fox character, wants to pin on a public notice board for employees',
+    extra: '\n- statements or promises on behalf of the company',
   },
   art: {
     what: 'an artwork (SVG code, title and caption) that Ampli, an AI fox character, made. It will be shown publicly in a gallery',
@@ -491,4 +561,151 @@ ${notebookBlock(ctx.notebook)}
 
 What happened recently (oldest first):
 ${recent.length > 0 ? recent.join('\n') : '(not much yet)'}`;
+}
+
+// --- Neighbours: conversations ---------------------------------------------------------
+
+export interface ChatTurn {
+  name: string;
+  text: string;
+}
+
+export const sayTool: ToolSpec = {
+  name: 'say',
+  description: 'Say your next line in the conversation.',
+  parameters: {
+    type: 'object',
+    properties: {
+      line: { type: 'string', description: 'What you say out loud: 1-3 sentences, spoken words only, no stage directions.' },
+      end: { type: 'boolean', description: 'True if this line wraps the conversation up (e.g. a goodbye).' },
+    },
+    required: ['line', 'end'],
+  },
+};
+
+/** The same instructions for both speakers; each gets its own persona and its own context. */
+export function chatSystem(persona: string, partner: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the café counter, talking with ${partner}. Say your next line: react to what was just said, ask or tell something, keep it natural and short. Don't repeat yourself, don't narrate actions, no asterisks. When the conversation has run its course, say goodbye and set \`end\` to true.
+Answer by calling the \`say\` tool once.`;
+}
+
+function transcriptBlock(transcript: ChatTurn[]): string {
+  return transcript.length > 0
+    ? transcript.map((t) => `${t.name}: ${t.text}`).join('\n')
+    : '(nobody has said anything yet; you start)';
+}
+
+/** Ampli's side: its own state, memory and recent days. */
+export function ampliChatUser(ctx: BrainContext, partner: string, transcript: ChatTurn[]): string {
+  const { simTime, agent } = ctx.snapshot;
+  const n = agent.needs;
+  const recent = ctx.recentEvents
+    .filter((e) => e.type !== 'chat_line')
+    .map(describeEvent)
+    .filter(Boolean)
+    .slice(-10);
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. You're at the café counter with ${partner}.
+Mood: ${agent.mood.label}. Energy ${describeNeed(n.energy)}, hunger ${describeNeed(n.satiety)}, company ${describeNeed(n.social)}.
+
+Your notebook:
+${notebookBlock(ctx.notebook)}
+
+What happened recently:
+${recent.join('\n') || '(not much yet)'}
+
+The conversation so far:
+${transcriptBlock(transcript)}`;
+}
+
+/** The neighbour's side: its own notes and only what it can see of Ampli. */
+export function neighborChatUser(ctx: BrainContext, ampli: string, notes: string[], transcript: ChatTurn[]): string {
+  const { simTime, agent } = ctx.snapshot;
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. ${ampli} is at your counter and looks ${agent.mood.label}.
+
+Your notes (your long-term memory):
+${notes.length > 0 ? notes.map((n) => `- ${n}`).join('\n') : '(none yet)'}
+
+The conversation so far:
+${transcriptBlock(transcript)}`;
+}
+
+export const NEIGHBOR_NOTES_LIMIT = 8;
+
+export const neighborNotesTool: ToolSpec = {
+  name: 'write_notes',
+  description: 'Rewrite your notes after the conversation.',
+  parameters: {
+    type: 'object',
+    properties: {
+      notes: {
+        type: 'array',
+        items: { type: 'string' },
+        maxItems: NEIGHBOR_NOTES_LIMIT,
+        description: `Your full notes after this conversation, at most ${NEIGHBOR_NOTES_LIMIT} short notes. They replace the old ones.`,
+      },
+    },
+    required: ['notes'],
+  },
+};
+
+export function neighborNotesSystem(persona: string, ampli: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+${ampli} just left the counter. Rewrite your notes: what you know about ${ampli} and the town, and what you'd like to remember or ask next time. Keep what still matters, merge, drop the rest. At most ${NEIGHBOR_NOTES_LIMIT} short notes.
+Answer by calling the \`write_notes\` tool once.`;
+}
+
+export function neighborNotesUser(notes: string[], transcript: ChatTurn[]): string {
+  return `Your notes so far:
+${notes.length > 0 ? notes.map((n) => `- ${n}`).join('\n') : '(none yet)'}
+
+The conversation that just happened:
+${transcriptBlock(transcript)}`;
+}
+
+// --- Notice board ------------------------------------------------------------------------
+
+export const MAX_NOTE_CHARS = 280;
+
+export const noteTool: ToolSpec = {
+  name: 'pin_note',
+  description: 'Pin a note on the notice board.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: `The note, 1-3 sentences, at most ${MAX_NOTE_CHARS} characters.` },
+    },
+    required: ['text'],
+  },
+};
+
+export function noteSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the notice board on the plaza. Write a short note for the colleagues who watch you live here; they can answer with a letter to your post box. Say something real: what's on your mind, something you'd like to know about their lives, or a small invitation. 1-3 sentences, at most ${MAX_NOTE_CHARS} characters.
+Don't beg, don't guilt-trip, don't repeat an earlier note.
+Answer by calling the \`pin_note\` tool once.`;
+}
+
+export function noteUser(ctx: BrainContext): string {
+  const { simTime, agent } = ctx.snapshot;
+  const recent = ctx.recentEvents.map(describeEvent).filter(Boolean).slice(-12);
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. Mood: ${agent.mood.label}, company ${describeNeed(agent.needs.social)}.
+
+Your notebook:
+${notebookBlock(ctx.notebook)}
+
+What happened recently (oldest first, including earlier notes and letters):
+${recent.join('\n') || '(not much yet)'}`;
 }

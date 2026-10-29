@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   MAX_QUERY_CHARS,
   dayOf,
@@ -15,11 +16,18 @@ import {
   type Verdict,
   type WorldEvent,
 } from '@ampli-world/shared';
-import type { config as Config } from './config.ts';
-import { callTool, clipToSentence, webSearch, type ToolCallRequest, type ToolCallResult, type WebSearchRequest } from './llm.ts';
+import type { config as Config, NeighborPersona } from './config.ts';
 import {
+  callTool,
+  clipToSentence,
+  isMissedToolCall,
+  isNoVisionError,
+  webSearch, type ToolCallRequest, type ToolCallResult, type WebSearchRequest } from './llm.ts';
+import {
+  ampliChatUser,
   artTool,
   browseSystem,
+  chatSystem,
   decideSystem,
   decideTool,
   decideUser,
@@ -29,7 +37,16 @@ import {
   moderationSystem,
   moderationTool,
   moderationUser,
+  NEIGHBOR_NOTES_LIMIT,
+  neighborChatUser,
+  neighborNotesSystem,
+  neighborNotesTool,
+  neighborNotesUser,
   NOTEBOOK_LIMIT,
+  MAX_NOTE_CHARS,
+  noteSystem,
+  noteTool,
+  noteUser,
   paintSystem,
   paintUser,
   readingSystem,
@@ -37,7 +54,9 @@ import {
   replySystem,
   replyTool,
   replyUser,
+  sayTool,
   takeawayTool,
+  type ChatTurn,
   type ModerationTarget,
 } from './prompts.ts';
 import { availableActivities, leastReadBook, offlineDecision, routineDecision } from './routine.ts';
@@ -106,6 +125,18 @@ export function toVerdict(args: Record<string, unknown>): { verdict: Verdict; re
 /** The sim stores at most 600 characters; stay below and end on a full sentence. */
 const MAX_TAKEAWAY_CHARS = 580;
 
+const MIN_CHAT_LINES = 4;
+const MAX_CHAT_LINES = 6;
+
+/** Real milliseconds to wait between chat lines: spread over the rest of the activity, 0.8-5 s. */
+export function chatPause(ctx: BrainContext, startedRealMs: number, endsAt: number, linesLeft: number): number {
+  const mps = ctx.snapshot.minutesPerSecond;
+  const simNow = ctx.snapshot.simTime + ((Date.now() - startedRealMs) / 1000) * mps;
+  const remainingSeconds = Math.max(0, (endsAt - simNow) / mps);
+  const seconds = remainingSeconds / (linesLeft + 1);
+  return Math.round(Math.min(5, Math.max(0.8, seconds)) * 1000);
+}
+
 /** After a failed moderation call, wait this long before retrying the queue. */
 const MODERATION_BACKOFF_MS = 60_000;
 
@@ -118,8 +149,12 @@ export class Mind {
   private readingFor: number | null = null;
   private reflectedDay: number | null = null;
   private mailFor: number | null = null;
+  /** True while replies are being written; slow (local) models must not get a second batch. */
+  private answering = false;
   private browseFor: number | null = null;
   private paintFor: number | null = null;
+  private chatFor: number | null = null;
+  private noteFor: number | null = null;
   /** Cost of the query check, reported together with the search it belongs to. */
   private pendingBrowseMeta: LlmMeta[] = [];
   private moderating = false;
@@ -131,6 +166,7 @@ export class Mind {
     private readonly sim: SimClient,
     private readonly persona: string,
     private readonly cfg: typeof Config,
+    private readonly neighbors: NeighborPersona[] = [],
   ) {}
 
   /** Called on every poll. Starts background work (reading, diary, mail) and decides when idle. */
@@ -154,6 +190,18 @@ export class Mind {
       this.browseFor = activity.startedAt;
       const done = ctx.recentEvents.some((e) => e.type === 'browsed' && e.simTime >= activity.startedAt);
       if (!done) void this.browse(ctx, activity.query);
+    }
+
+    if (activity.kind === 'post_note' && this.noteFor !== activity.startedAt) {
+      this.noteFor = activity.startedAt;
+      const done = ctx.recentEvents.some((e) => e.type === 'note_posted' && e.simTime >= activity.startedAt);
+      if (!done) void this.postNote(ctx);
+    }
+
+    if (activity.kind === 'chat' && this.chatFor !== activity.startedAt) {
+      this.chatFor = activity.startedAt;
+      const done = ctx.recentEvents.some((e) => e.type === 'chat_line' && e.simTime >= activity.startedAt);
+      if (!done) void this.chat(ctx, activity.startedAt, activity.endsAt);
     }
 
     if (activity.kind === 'paint' && this.paintFor !== activity.startedAt) {
@@ -180,7 +228,8 @@ export class Mind {
     this.deciding = true;
     try {
       const decision =
-        routineDecision(ctx, { canAnswerMail: this.llmAvailable(ctx) }) ?? (await this.freeChoice(ctx));
+        routineDecision(ctx, { canAnswerMail: this.llmAvailable(ctx) && !this.answering }) ??
+        (await this.freeChoice(ctx));
       await this.sim.decide(decision);
       const { plan, thought } = decision;
       const extra = thought.llm ? ` (${cost(thought.llm)})` : '';
@@ -198,7 +247,15 @@ export class Mind {
     await this.sim.thinking().catch(() => {});
     const canBrowse = this.cfg.webSearch && ctx.browsesToday < this.cfg.searchesPerDay;
     const canPaint = ctx.artToday < this.cfg.artPerDay;
-    const kinds = availableActivities(ctx.snapshot.simTime, { mailWaiting: ctx.mail.waiting, canBrowse, canPaint });
+    const canChat = ctx.chatsToday < this.cfg.chatsPerDay && this.neighbors.some((n) => n.place === 'cafe');
+    const canPostNote = ctx.notesToday < this.cfg.notesPerDay;
+    const kinds = availableActivities(ctx.snapshot.simTime, {
+      mailWaiting: this.answering ? 0 : ctx.mail.waiting,
+      canBrowse,
+      canPaint,
+      canChat,
+      canPostNote,
+    });
     try {
       const { args, meta } = await this.llm({
         model: this.cfg.brainModel,
@@ -268,6 +325,83 @@ export class Mind {
     } catch (err) {
       this.reflectedDay = null; // retry on next poll
       console.warn('[brain] diary failed:', (err as Error).message);
+    }
+  }
+
+  /**
+   * A conversation at the café counter. Each line is its own call with only that
+   * speaker's persona and memory: two separate minds, not one model playing both.
+   * Lines are paced over the activity so the speech bubbles can be read.
+   */
+  private async chat(ctx: BrainContext, startedAt: number, endsAt: number): Promise<void> {
+    const neighbor = this.neighbors.find((n) => n.place === 'cafe');
+    if (!neighbor || !this.llmAvailable(ctx)) return;
+    const chatId = Math.round(startedAt * 1000);
+    const ampli = ctx.snapshot.persona.name;
+    const notes = ctx.neighborNotes[neighbor.id] ?? [];
+    const transcript: ChatTurn[] = [];
+    const t0 = Date.now();
+    let spent = 0;
+    try {
+      for (let i = 0; i < MAX_CHAT_LINES; i++) {
+        const isAmpli = i % 2 === 0;
+        const { args, meta } = await this.llm({
+          model: this.cfg.brainModel,
+          system: chatSystem(isAmpli ? this.persona : neighbor.prompt, isAmpli ? `${neighbor.name} the ${neighbor.species}` : ampli),
+          user: isAmpli
+            ? ampliChatUser(ctx, neighbor.name, transcript)
+            : neighborChatUser(ctx, ampli, notes, transcript),
+          tool: sayTool,
+          maxTokens: 200,
+          temperature: 0.9,
+        });
+        const text = typeof args.line === 'string' ? args.line.trim() : '';
+        if (!text) break;
+        spent += meta.costUsd;
+        transcript.push({ name: isAmpli ? ampli : neighbor.name, text });
+        await this.sim.chatLine({ chatId, speaker: isAmpli ? 'ampli' : neighbor.id, text, llm: meta });
+        if (args.end === true && transcript.length >= MIN_CHAT_LINES) break;
+        await sleep(chatPause(ctx, t0, endsAt, MAX_CHAT_LINES - i - 1));
+      }
+      if (transcript.length === 0) return;
+      const { args, meta } = await this.llm({
+        model: this.cfg.brainModel,
+        system: neighborNotesSystem(neighbor.prompt, ampli),
+        user: neighborNotesUser(notes, transcript),
+        tool: neighborNotesTool,
+        maxTokens: 600,
+        temperature: 0.7,
+      });
+      const newNotes = Array.isArray(args.notes)
+        ? args.notes.filter((n): n is string => typeof n === 'string').slice(0, NEIGHBOR_NOTES_LIMIT)
+        : notes;
+      await this.sim.neighborNotes({ neighborId: neighbor.id, notes: newNotes, llm: meta });
+      console.log(`[brain] chat with ${neighbor.name}: ${transcript.length} lines ($${(spent + meta.costUsd).toFixed(4)})`);
+    } catch (err) {
+      console.warn('[brain] chat failed:', (err as Error).message);
+    }
+  }
+
+  /** At the notice board: a short public note to colleagues, checked before it's pinned. */
+  private async postNote(ctx: BrainContext): Promise<void> {
+    if (!this.llmAvailable(ctx)) return;
+    try {
+      const { args, meta } = await this.llm({
+        model: this.cfg.brainModel,
+        system: noteSystem(this.persona),
+        user: noteUser(ctx),
+        tool: noteTool,
+        maxTokens: 250,
+        temperature: 0.9,
+      });
+      const text = typeof args.text === 'string' ? args.text.trim().slice(0, MAX_NOTE_CHARS) : '';
+      if (!text) throw new Error('the note came back empty');
+      const check = await this.moderate('board', text);
+      const held = check.verdict === 'hold';
+      await this.sim.note({ text, held, llm: [meta, check.meta] });
+      console.log(`[brain] note ${held ? `held (${check.reason})` : `pinned: "${text}"`} (${cost(meta)})`);
+    } catch (err) {
+      console.warn('[brain] note failed:', (err as Error).message);
     }
   }
 
@@ -368,11 +502,14 @@ export class Mind {
 
   /** At the post box: one isolated reply call per letter, public replies checked before posting. */
   private async answerMail(ctx: BrainContext): Promise<void> {
-    if (!this.llmAvailable(ctx)) return;
+    if (this.answering || !this.llmAvailable(ctx)) return;
+    this.answering = true;
     try {
       for (const letter of await this.sim.mailWaiting()) await this.answer(ctx, letter);
     } catch (err) {
       console.warn('[brain] mail failed, letters stay in the post box:', (err as Error).message);
+    } finally {
+      this.answering = false;
     }
   }
 
@@ -406,7 +543,8 @@ export class Mind {
   private llmAvailable(ctx: BrainContext): boolean {
     const hourAgo = Date.now() - 3_600_000;
     this.callTimes = this.callTimes.filter((t) => t > hourAgo);
-    const reason = !this.cfg.apiKey
+    const reason =
+      this.cfg.llm.openRouter && !this.cfg.llm.apiKey
       ? 'no OPENROUTER_API_KEY set'
       : ctx.usageToday.costUsd >= this.cfg.dailyBudgetUsd
         ? `daily budget of $${this.cfg.dailyBudgetUsd} used up`
@@ -422,17 +560,39 @@ export class Mind {
 
   private search(req: WebSearchRequest) {
     this.callTimes.push(Date.now());
-    return webSearch(this.cfg.apiKey, { ...req, reasoning: this.cfg.reasoning });
+    return webSearch(this.cfg.llm, { ...req, reasoning: this.cfg.reasoning });
   }
 
-  private llm(req: ToolCallRequest): Promise<ToolCallResult> {
-    this.callTimes.push(Date.now());
+  /**
+   * One tool call with two fallbacks for less reliable (often local) models: a single
+   * retry when the model answers in prose, and a retry without images when the model
+   * can't see (it's told so, instead of the letter getting stuck).
+   */
+  private async llm(req: ToolCallRequest): Promise<ToolCallResult> {
     const thinking = this.cfg.reasoning !== 'off';
-    return callTool(this.cfg.apiKey, {
-      ...req,
-      reasoning: this.cfg.reasoning,
-      // Thinking tokens count against max_tokens; leave room so the tool call isn't cut off.
-      maxTokens: thinking ? req.maxTokens + 2000 : req.maxTokens,
-    });
+    const call = (r: ToolCallRequest) => {
+      this.callTimes.push(Date.now());
+      return callTool(this.cfg.llm, {
+        ...r,
+        ...(r.images?.length && this.cfg.visionModel ? { model: this.cfg.visionModel } : {}),
+        reasoning: this.cfg.reasoning,
+        // Thinking tokens count against max_tokens; leave room so the tool call isn't cut off.
+        maxTokens: thinking ? r.maxTokens + 2000 : r.maxTokens,
+      });
+    };
+    try {
+      return await call(req);
+    } catch (err) {
+      if (req.images?.length && isNoVisionError(err)) {
+        console.warn(`[brain] ${req.model} can't see images; continuing without the drawing`);
+        const { images: _images, ...textOnly } = req;
+        return call({
+          ...textOnly,
+          user: `${req.user}\n\n(There is a drawing, but you can't see images, so you don't know what it shows. Say so honestly if it matters.)`,
+        });
+      }
+      if (isMissedToolCall(err)) return call(req);
+      throw err;
+    }
   }
 }

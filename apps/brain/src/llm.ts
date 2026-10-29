@@ -1,7 +1,15 @@
 import type { LlmMeta, WebSource } from '@ampli-world/shared';
 
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const TIMEOUT_MS = 60_000;
+export const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
+
+/** Where completions go: OpenRouter, or any OpenAI-compatible server such as a local Ollama. */
+export interface LlmEndpoint {
+  baseUrl: string;
+  apiKey: string;
+  timeoutMs: number;
+  /** OpenRouter-only features: the `reasoning` parameter, the web plugin, `usage.cost`. */
+  openRouter: boolean;
+}
 
 export interface ToolSpec {
   name: string;
@@ -19,6 +27,12 @@ export function parseReasoning(value: string | undefined): ReasoningSetting {
 /** OpenRouter's unified `reasoning` request parameter. */
 export function reasoningParam(setting: ReasoningSetting): Record<string, unknown> {
   return setting === 'off' ? { enabled: false } : { effort: setting };
+}
+
+/** OpenRouter takes `reasoning`; OpenAI-compatible servers (Ollama, vLLM, …) take `reasoning_effort`. */
+export function reasoningFields(endpoint: LlmEndpoint, setting: ReasoningSetting): Record<string, unknown> {
+  if (endpoint.openRouter) return { reasoning: reasoningParam(setting) };
+  return { reasoning_effort: setting === 'off' ? 'none' : setting };
 }
 
 export interface ToolCallRequest {
@@ -67,22 +81,23 @@ export function extractToolArgs(data: ChatResponse): Record<string, unknown> | n
 }
 
 /** POST one chat completion; throws on HTTP or API errors. */
-async function chat(apiKey: string, body: Record<string, unknown>): Promise<{ data: ChatResponse; meta: LlmMeta }> {
+async function chat(endpoint: LlmEndpoint, body: Record<string, unknown>): Promise<{ data: ChatResponse; meta: LlmMeta }> {
   const started = performance.now();
-  const res = await fetch(ENDPOINT, {
+  const res = await fetch(`${endpoint.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
-      'x-title': 'ampli-world',
+      ...(endpoint.apiKey ? { authorization: `Bearer ${endpoint.apiKey}` } : {}),
+      ...(endpoint.openRouter ? { 'x-title': 'ampli-world' } : {}),
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(endpoint.timeoutMs),
   });
 
   const data = (await res.json().catch(() => ({}))) as ChatResponse;
   if (!res.ok || data.error) {
-    throw new Error(`OpenRouter ${res.status}: ${data.error?.message ?? 'unknown error'}`);
+    const who = endpoint.openRouter ? 'OpenRouter' : endpoint.baseUrl;
+    throw new Error(`${who} ${res.status}: ${data.error?.message ?? 'unknown error'}`);
   }
   const meta: LlmMeta = {
     model: data.model ?? String(body.model),
@@ -99,8 +114,8 @@ async function chat(apiKey: string, body: Record<string, unknown>): Promise<{ da
  * One OpenRouter chat completion that must answer by calling `tool`.
  * Structured output via a forced tool call works across most providers on OpenRouter.
  */
-export async function callTool(apiKey: string, req: ToolCallRequest): Promise<ToolCallResult> {
-  const { data, meta } = await chat(apiKey, {
+export async function callTool(endpoint: LlmEndpoint, req: ToolCallRequest): Promise<ToolCallResult> {
+  const { data, meta } = await chat(endpoint, {
     model: req.model,
     max_tokens: req.maxTokens,
     temperature: req.temperature ?? 0.9,
@@ -118,7 +133,7 @@ export async function callTool(apiKey: string, req: ToolCallRequest): Promise<To
     ],
     tools: [{ type: 'function', function: req.tool }],
     tool_choice: { type: 'function', function: { name: req.tool.name } },
-    reasoning: reasoningParam(req.reasoning ?? 'off'),
+    ...reasoningFields(endpoint, req.reasoning ?? 'off'),
   });
   const args = extractToolArgs(data);
   if (!args) {
@@ -173,6 +188,16 @@ export function plainText(text: string): string {
     .trim();
 }
 
+/** The model answered in prose instead of calling the tool. Worth one retry. */
+export function isMissedToolCall(err: unknown): boolean {
+  return err instanceof Error && / did not call /.test(err.message);
+}
+
+/** The server or model can't take images (e.g. a text-only local model). */
+export function isNoVisionError(err: unknown): boolean {
+  return err instanceof Error && /multimodal|does not support image|vision/i.test(err.message);
+}
+
 /** Shortens text to at most `max` characters, ending at the last full sentence if there is one. */
 export function clipToSentence(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -185,8 +210,9 @@ export function clipToSentence(text: string, max: number): string {
  * A completion with OpenRouter's web plugin. The Exa engine is pinned so cost and
  * domain filters behave the same for every model.
  */
-export async function webSearch(apiKey: string, req: WebSearchRequest): Promise<WebSearchResult> {
-  const { data, meta } = await chat(apiKey, {
+export async function webSearch(endpoint: LlmEndpoint, req: WebSearchRequest): Promise<WebSearchResult> {
+  if (!endpoint.openRouter) throw new Error('web search needs OpenRouter (its web plugin)');
+  const { data, meta } = await chat(endpoint, {
     model: req.model,
     max_tokens: req.maxTokens,
     temperature: 0.7,

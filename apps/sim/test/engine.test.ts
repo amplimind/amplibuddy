@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PLACES, walkMinutes, type EventBody } from '@ampli-world/shared';
+import {
+  PLACES,
+  WALK_TILES_PER_SECOND,
+  pathBetween,
+  pathLength,
+  walkMinutes,
+  type EventBody,
+  type Needs,
+} from '@ampli-world/shared';
 import { Engine, initialState, START_TIME } from '../src/engine.ts';
 import { Store } from '../src/store.ts';
 
@@ -37,7 +45,7 @@ test('plan elsewhere walks first, then starts the activity on arrival', () => {
   assert.equal(engine.agent.place, null);
   assert.ok(engine.agent.walk);
 
-  const walk = walkMinutes('home', 'cafe');
+  const walk = walkMinutes('home', 'cafe', 1);
   engine.advance(walk / 2);
   assert.notDeepEqual(engine.agent.position, PLACES.home.spot);
 
@@ -100,4 +108,54 @@ test('store round-trips state, events and usage', () => {
   store.recordLlmCall('decide', { model: 'm', promptTokens: 10, completionTokens: 5, costUsd: 0.25, latencyMs: 1 });
   store.recordLlmCall('diary', { model: 'm', promptTokens: 10, completionTokens: 5, costUsd: 0.5, latencyMs: 1 });
   assert.deepEqual(store.usageToday(), { calls: 2, costUsd: 0.75 });
+});
+
+test('walks take the same real time at any sim speed', () => {
+  const tiles = pathLength(pathBetween('home', 'cafe'));
+  const realSeconds = tiles / WALK_TILES_PER_SECOND;
+  for (const speed of [0.0166667, 0.1, 1, 10]) {
+    assert.ok(Math.abs(walkMinutes('home', 'cafe', speed) / speed - realSeconds) < 1e-9);
+  }
+  assert.ok(realSeconds > 10 && realSeconds < 25, `home -> cafe should take a short stroll, got ${realSeconds}s`);
+});
+
+test('a walk saved at another speed keeps its progress and gets re-timed', () => {
+  const state = initialState();
+  // Saved mid-way through a slow walk (as if the old timing was 100 sim minutes).
+  state.agent.place = null;
+  state.agent.walk = {
+    from: 'home',
+    to: 'cafe',
+    path: pathBetween('home', 'cafe'),
+    startedAt: state.simTime - 50,
+    endsAt: state.simTime + 50,
+  };
+  const engine = new Engine(state, () => {}, () => undefined, 0.1);
+  const walk = engine.agent.walk!;
+  const duration = walkMinutes('home', 'cafe', 0.1);
+  assert.ok(Math.abs(walk.endsAt - walk.startedAt - duration) < 1e-9);
+  assert.ok(Math.abs(walk.endsAt - engine.simTime - duration / 2) < 1e-9, 'half-way stays half-way');
+});
+
+test('company drains when alone and fills up when chatting', () => {
+  const { engine } = setup();
+  const start = engine.agent.needs.social;
+  engine.advance(120);
+  assert.equal(engine.agent.needs.social, start - 10);
+  const state = initialState();
+  state.simTime = 9 * 60;
+  state.agent.place = 'cafe';
+  state.agent.needs.social = 10;
+  const chatty = new Engine(state, () => {});
+  chatty.plan({ kind: 'chat' });
+  chatty.advance(30);
+  assert.equal(chatty.agent.needs.social, 10 + 35);
+});
+
+test('worlds saved before the social need get a default', () => {
+  const state = initialState();
+  const { social: _dropped, ...oldNeeds } = state.agent.needs;
+  state.agent.needs = oldNeeds as Needs;
+  const engine = new Engine(state, () => {});
+  assert.equal(engine.agent.needs.social, 60);
 });

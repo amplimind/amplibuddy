@@ -64,7 +64,7 @@ export function App() {
             {tab === 'Art' && <Gallery name={name} artVersion={artVersion} />}
             {tab === 'Diary' && <DiaryView diary={diary} name={name} />}
             {tab === 'Notebook' && <NotebookView notebook={notebook} name={name} />}
-            {tab === 'How it works' && <HowItWorks name={name} usage={usage} />}
+            {tab === 'How it works' && <HowItWorks name={name} usage={usage} neighbors={snapshot?.neighbors ?? []} />}
           </section>
         </aside>
       </main>

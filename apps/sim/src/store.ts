@@ -264,6 +264,26 @@ export class Store {
     return Number(row.n);
   }
 
+  /** How often an activity was started since 00:00 UTC today. */
+  countActivityToday(kind: string): number {
+    const since = `${new Date().toISOString().slice(0, 10)}T00:00:00`;
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM events WHERE type = 'activity_started' AND json_extract(data, '$.kind') = ? AND real_time >= ?",
+      )
+      .get(kind, since) as Row;
+    return Number(row.n);
+  }
+
+  neighborNotes(id: string): string[] {
+    const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(`neighbor_notes:${id}`) as Row | undefined;
+    return row ? (JSON.parse(String(row.value)) as string[]) : [];
+  }
+
+  setNeighborNotes(id: string, notes: string[]): void {
+    this.db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)').run(`neighbor_notes:${id}`, JSON.stringify(notes));
+  }
+
   /** Calls and spend since 00:00 UTC today. */
   usageToday(): UsageToday {
     const since = `${new Date().toISOString().slice(0, 10)}T00:00:00`;

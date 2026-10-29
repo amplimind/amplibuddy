@@ -34,6 +34,8 @@ const OFFLINE_THOUGHTS: Record<ActivityKind, string[]> = {
   check_mail: ['Let me see if anyone wrote to me.'],
   browse: ['I want to look something up.'],
   paint: ['I feel like making something.'],
+  chat: ['I could use some company.'],
+  post_note: ['Maybe someone out there wants to write to me.'],
 };
 
 function pick<T>(items: T[], random: () => number): T {
@@ -50,7 +52,7 @@ function decision(kind: ActivityKind, text: string, source: ThoughtSource, bookI
  */
 export function availableActivities(
   simTime: number,
-  opts: { mailWaiting?: number; canBrowse?: boolean; canPaint?: boolean } = {},
+  opts: { mailWaiting?: number; canBrowse?: boolean; canPaint?: boolean; canChat?: boolean; canPostNote?: boolean } = {},
 ): ActivityKind[] {
   const h = hourOf(simTime);
   const evening = h >= 20 || h < 5;
@@ -59,6 +61,8 @@ export function availableActivities(
     if (k === 'check_mail') return (opts.mailWaiting ?? 0) > 0;
     if (k === 'browse') return opts.canBrowse === true;
     if (k === 'paint') return opts.canPaint === true;
+    if (k === 'chat') return opts.canChat === true && h >= 7 && h < 21;
+    if (k === 'post_note') return opts.canPostNote === true;
     return true;
   });
 }
@@ -109,7 +113,7 @@ export function utility(kind: ActivityKind, needs: Needs, simTime: number): numb
   const def = ACTIVITIES[kind];
   const hours = (kind === 'sleep' ? minutesUntilMorning(simTime) : def.minutes) / 60;
   let score = 0;
-  for (const key of ['energy', 'satiety', 'fun'] as const) {
+  for (const key of ['energy', 'satiety', 'fun', 'social'] as const) {
     const deficit = 100 - needs[key];
     const gain = Math.min(deficit, Math.max(0, def.rates[key]) * hours);
     score += gain * (deficit / 100) ** 2;
