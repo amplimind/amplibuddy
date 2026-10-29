@@ -121,29 +121,22 @@ export function deleteBook(id: string, books: Map<string, ShelfBook>): boolean {
   return true;
 }
 
-/** The parts of unpdf we use (pdf.js underneath). Loaded on demand, so the town runs without it. */
-interface Unpdf {
-  getDocumentProxy(data: Uint8Array, options?: Record<string, unknown>): Promise<unknown>;
-  extractText(pdf: unknown, options: { mergePages: false }): Promise<{ totalPages: number; text: string[] }>;
-  getMeta(pdf: unknown): Promise<{ info?: Record<string, unknown> }>;
-}
-
 export class PdfSupportMissing extends Error {}
 
 /**
- * The text of a PDF, page by page, plus its title and author if it names them. Runs
- * pdf.js with code evaluation off: an uploaded file is data, never a program.
+ * The text of a PDF, page by page, plus its title and author if it names them. Text only:
+ * no fonts loaded, nothing rendered, and this pdf.js has no code-evaluation path left (the
+ * one behind CVE-2024-4367 is gone), so an uploaded file stays data.
  */
 export async function extractPdf(bytes: Uint8Array, fileName: string): Promise<PdfExtract> {
-  let unpdf: Unpdf;
+  // Loaded on demand: pdf.js is big, and the town runs fine without it.
+  let unpdf: typeof import('unpdf');
   try {
-    // A variable, so the type checker and bundlers don't insist on it being installed.
-    const name = 'unpdf';
-    unpdf = (await import(name)) as Unpdf;
+    unpdf = await import('unpdf');
   } catch {
     throw new PdfSupportMissing('PDF support is not installed yet: run `npm install` in the Ampli World folder.');
   }
-  const pdf = await unpdf.getDocumentProxy(bytes, { isEvalSupported: false, disableFontFace: true });
+  const pdf = await unpdf.getDocumentProxy(bytes, { disableFontFace: true });
   const { totalPages, text } = await unpdf.extractText(pdf, { mergePages: false });
   const info: Record<string, unknown> = (await unpdf.getMeta(pdf).catch(() => ({ info: {} }))).info ?? {};
   const meta = (key: string) => (typeof info[key] === 'string' ? (info[key] as string).trim() : '');

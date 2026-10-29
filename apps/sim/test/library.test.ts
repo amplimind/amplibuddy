@@ -9,7 +9,7 @@ const dataDir = mkdtempSync(join(tmpdir(), 'ampli-library-'));
 process.env.AMPLI_DATA_DIR = dataDir;
 const { READING_PART_CHARS } = await import('@ampli-world/shared');
 const { createApp } = await import('../src/http.ts');
-const { loadLibrary } = await import('../src/library.ts');
+const { extractPdf, loadLibrary } = await import('../src/library.ts');
 const { Sim } = await import('../src/sim.ts');
 const { Store } = await import('../src/store.ts');
 const { WORLD_LIBRARY_DIR } = await import('@ampli-world/shared/node');
@@ -91,4 +91,52 @@ test('library: PDFs must be PDFs, and only from this Mac', async () => {
   assert.equal(plain.status, 415, 'not as a simple cross-site request');
   const remote = await call('POST', '/api/setup/library', { title: 't', text: 'x' }, { host: 'evil.example' });
   assert.equal(remote.status, 403);
+});
+
+/** A real (tiny) PDF: one Helvetica text line per page, with title and author. */
+function tinyPdf(pages: string[], info: { title?: string; author?: string } = {}): Uint8Array {
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pages.map((_, i) => `${4 + 2 * i} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  pages.forEach((text, i) => {
+    const content = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + 2 * i} 0 R >>`);
+    objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+  });
+  objects.push(`<< ${info.title ? `/Title (${info.title}) ` : ''}${info.author ? `/Author (${info.author})` : ''} >>`);
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((body, i) => {
+    const at = pdf.length;
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+    return at;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info ${objects.length} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
+test('library: a PDF becomes text, page by page, with its title and author', async () => {
+  const extract = await extractPdf(
+    tinyPdf(['The pond keeps its oxygen under the ice.', 'Fish slow down in winter.'], { title: 'Winter Ponds', author: 'R. Reed' }),
+    'scan_2026.pdf',
+  );
+  assert.deepEqual(extract, {
+    title: 'Winter Ponds',
+    author: 'R. Reed',
+    text: 'The pond keeps its oxygen under the ice.\n\nFish slow down in winter.',
+    pages: 2,
+  });
+  const untitled = await extractPdf(tinyPdf(['Hello.']), 'team-notes_v2.pdf');
+  assert.equal(untitled.title, 'team notes v2', 'no title inside: the file name will do');
+
+  const { call } = setup();
+  const res = await call<{ title: string; pages: number }>('POST', '/api/setup/library/pdf', tinyPdf(['Page one.']), {
+    'content-type': 'application/pdf',
+    'x-file-name': encodeURIComponent('Über Teiche.pdf'),
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual([res.body.title, res.body.pages], ['Über Teiche', 1]);
 });

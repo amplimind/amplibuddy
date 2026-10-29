@@ -11,6 +11,7 @@
   "dependencies": {
     "@ampli-world/shared": "*",
     "@hono/node-server": "^2.1.4",
-    "hono": "^4.7.0"
+    "hono": "^4.7.0",
+    "unpdf": "1.8.1"
   }
 }

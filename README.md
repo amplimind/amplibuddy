@@ -256,7 +256,7 @@ Three processes, on purpose (same split as Pino):
 
 **Memory** is just text: the event log, a nightly diary, and a notebook of at most 12 notes that the character rewrites every night (the `REFLECT_MODEL` call). That rewrite is the only long-term memory, so forgetting is part of the design.
 
-**Reading is real**: when the character reads, the model gets the book text and writes a takeaway, which feeds into that night's notebook rewrite. Long books are split into parts of ~24k characters (`READING_PART_CHARS`), one per visit; the sim hands out the next part with the notes on the earlier ones (`/api/brain/books/:id`). PDFs are read with pdf.js ([unpdf](https://github.com/unjs/unpdf), code evaluation off) in the sim.
+**Reading is real**: when the character reads, the model gets the book text and writes a takeaway, which feeds into that night's notebook rewrite. Long books are split into parts of ~24k characters (`READING_PART_CHARS`), one per visit; the sim hands out the next part with the notes on the earlier ones (`/api/brain/books/:id`). PDFs are read in the sim with pdf.js ([unpdf](https://github.com/unjs/unpdf), text only, no fonts loaded).
 
 **Company**: a fourth need, filled by letters, by notes pinned on the notice board inviting people to write, and by chats with neighbours. Neighbours are separate AI characters with their own persona, place, hours and notes (`world/neighbors/*.md` by default, `data/world/neighbors/` once edited in the app). Only the neighbours listed exist, and the prompt says so, so the character doesn't imagine strangers.
 
