@@ -1,0 +1,34 @@
+apps/sim/test/library.test.ts
+  s_2cca0dc321ad0c::t_559f481df31c44 12,95-141
+  s_2cca0dc321ad0c::t_53fe13e0ebdb29 142
+README.md
+  s_2cca0dc321ad0c::t_6eea2a04741610 259
+apps/sim/src/library.ts
+  s_2cca0dc321ad0c::t_6eea2a04741610 127-129,139
+  s_2cca0dc321ad0c::t_559f481df31c44 132-133,135
+apps/sim/package.json
+  s_2cca0dc321ad0c::t_a6525e202018f7 14-15
+package-lock.json
+  s_2cca0dc321ad0c::t_3d984b9bcb36eb 37-38,1673-1689
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9891d2dd13504d4bf1dd59e996ff5b50aff43014",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
