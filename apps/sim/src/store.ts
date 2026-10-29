@@ -288,6 +288,25 @@ export class Store {
     return Number(row.n);
   }
 
+  /** The latest web searches, oldest first. */
+  recentSearches(limit = 8): { query: string; takeaway?: string; simTime: number }[] {
+    const rows = this.db
+      .prepare("SELECT sim_time, data FROM events WHERE type = 'browsed' ORDER BY id DESC LIMIT ?")
+      .all(limit) as Row[];
+    return rows.reverse().map((r) => {
+      const data = JSON.parse(String(r.data)) as { query: string; takeaway?: string };
+      return { query: data.query, ...(data.takeaway ? { takeaway: data.takeaway } : {}), simTime: Number(r.sim_time) };
+    });
+  }
+
+  /** A book's latest readings, newest first: where reading continues. */
+  readingsOf(bookId: string, limit = 12): { part?: number; parts?: number; takeaway: string }[] {
+    const rows = this.db
+      .prepare("SELECT data FROM events WHERE type = 'reading' AND json_extract(data, '$.bookId') = ? ORDER BY id DESC LIMIT ?")
+      .all(bookId, limit) as Row[];
+    return rows.map((r) => JSON.parse(String(r.data)) as { part?: number; parts?: number; takeaway: string });
+  }
+
   neighborNotes(id: string): string[] {
     const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(`neighbor_notes:${id}`) as Row | undefined;
     return row ? (JSON.parse(String(row.value)) as string[]) : [];

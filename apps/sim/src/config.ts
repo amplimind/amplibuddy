@@ -22,7 +22,6 @@ export const config = {
   gyrosNudgeAfterMin: Number(process.env.GYROS_NUDGE_AFTER_MIN ?? 120),
   sitePassword: process.env.SITE_PASSWORD ?? '',
   dbFile: process.env.SIM_DB_FILE ?? join(DATA_DIR, 'world.db'),
-  libraryDir: `${ROOT}world/library`,
   webDist: `${ROOT}apps/web/dist`,
 };
 

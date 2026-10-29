@@ -134,7 +134,9 @@ function FeedItem({ event }: { event: WorldEvent }) {
         <li className="feed-item feed-reading">
           {time}
           <p>
-            <span className="feed-kicker">Notes on “{event.data.title}”</span>
+            <span className="feed-kicker">
+              Notes on “{event.data.title}”{event.data.part ? `, part ${event.data.part} of ${event.data.parts}` : ''}
+            </span>
             {event.data.takeaway}
           </p>
           <SourceBadge source="llm" llm={event.data.llm} />
@@ -366,8 +368,9 @@ export function HowItWorks({ name, usage, neighbors }: { name: string; usage: Us
       </p>
       <h3>4. Reading is real</h3>
       <p>
-        The library books are real text files. When {name} reads one, the model gets the full text and writes down what
-        stuck. That note can end up in the notebook and shape later choices.
+        The library books are real texts, and you can add your own (⚙️ → Library, also as PDF). When {name} reads, the
+        model gets the actual text and writes down what stuck. Long books are read in parts, one per visit, with the notes
+        on the earlier parts at hand. Those notes can end up in the notebook and shape later choices.
       </p>
       <h3>5. Every thought has a price tag</h3>
       <p>

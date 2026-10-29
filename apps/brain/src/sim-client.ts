@@ -1,6 +1,6 @@
 import type {
   ArtworkRequest,
-  BookWithText,
+  BookPart,
   BrainLetter,
   BrainContext,
   BrowseRequest,
@@ -42,7 +42,8 @@ export class SimClient {
     return this.request('GET', `/api/brain/events-since?simTime=${simTime}`);
   }
 
-  book(id: string): Promise<BookWithText> {
+  /** The part of a book to read now. */
+  book(id: string): Promise<BookPart> {
     return this.request('GET', `/api/brain/books/${encodeURIComponent(id)}`);
   }
 

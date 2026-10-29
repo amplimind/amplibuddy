@@ -16,7 +16,7 @@ import {
   neighborPresent,
   parseFrontmatter,
   type ActivityKind,
-  type BookWithText,
+  type BookPart,
   type BrainContext,
   type BrainLetter,
   type DiaryEntry,
@@ -98,7 +98,7 @@ export function describeEvent(e: WorldEvent): string | null {
     case 'activity_finished':
       return null;
     case 'reading':
-      return `${at} After reading "${e.data.title}" you noted: ${e.data.takeaway}`;
+      return `${at} After reading "${e.data.title}"${e.data.part ? ` (part ${e.data.part} of ${e.data.parts})` : ''} you noted: ${e.data.takeaway}`;
     case 'diary_written':
       return `${at} You wrote your diary for day ${e.data.day} and fell asleep.`;
     case 'browsed':
@@ -164,6 +164,16 @@ const OPTION_ORDER: ActivityKind[] = [
  * question mark), next to the places that can answer them. Curiosity needs a concrete
  * question before a web search makes sense.
  */
+/** What was already looked up, with what came of it: so the next search builds on it. */
+export function searchedBlock(ctx: BrainContext): string {
+  const searches = ctx.recentSearches.slice(-6);
+  if (searches.length === 0) return '';
+  const lines = searches.map((s) => `- "${s.query}"${s.takeaway ? `: ${s.takeaway.slice(0, 160)}` : ''}`);
+  return `\nWhat you already looked up at the internet café (don't search these again in other words; use what you found, or look up something new):
+${lines.join('\n')}
+`;
+}
+
 export function wonderingBlock(ctx: BrainContext, kinds: ActivityKind[]): string {
   const fromNotebook = ctx.notebook.filter((n) => n.includes('?'));
   const fromReading = ctx.recentEvents
@@ -341,7 +351,15 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
     .join('\n');
 
   const books = ctx.books
-    .map((b) => `- ${b.id}: "${b.title}" by ${b.author}. ${b.blurb} (you've read it ${b.timesRead}×)`)
+    .map((b) => {
+      const progress =
+        b.parts > 1
+          ? b.nextPart > 1
+            ? `; ${b.parts} parts, you're at part ${b.nextPart}`
+            : `; long, ${b.parts} parts, one per visit`
+          : '';
+      return `- ${b.id}: "${b.title}" by ${b.author}. ${b.blurb} (you've read it ${b.timesRead}×${progress})`;
+    })
     .join('\n');
 
   // "finished" events are hidden from the event list, so say it explicitly or the
@@ -389,7 +407,7 @@ How you feel:
 
 Your notebook (your long-term memory):
 ${notebookBlock(ctx.notebook)}
-${wonderingBlock(ctx, kinds)}
+${wonderingBlock(ctx, kinds)}${kinds.includes('browse') ? searchedBlock(ctx) : ''}
 Your last diary entry:
 ${diaryBlock(ctx.lastDiary)}
 
@@ -434,11 +452,19 @@ ${GROUND_RULES}
 You are sitting in the library reading. After the text, note what stuck with you by calling the \`takeaway\` tool once. Only use what is actually in the text; if you disagree or something seems off, say so.`;
 }
 
-export function readingUser(book: BookWithText, notebook: string[]): string {
+export function readingUser(book: BookPart, notebook: string[]): string {
+  const where =
+    book.parts > 1
+      ? `You are reading part ${book.part} of ${book.parts} of "${book.title}" by ${book.author}. Note what stuck with you from this part.`
+      : `You are reading "${book.title}" by ${book.author}.`;
+  const earlier =
+    book.earlier.length > 0
+      ? `\n\nWhat you noted on the parts before this one:\n${book.earlier.map((t) => `- ${t}`).join('\n')}`
+      : '';
   return `Your notebook, for context:
 ${notebookBlock(notebook)}
 
-You are reading "${book.title}" by ${book.author}.
+${where}${earlier}
 
 <book>
 ${book.text}

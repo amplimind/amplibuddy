@@ -33,7 +33,7 @@ import {
 } from '../src/mind.ts';
 import { ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, buildPersonaPrompt, decideTool, decideUser, moderationSystem, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
-import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, resultsBlock } from '../src/search.ts';
+import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, repeatedSearch, resultsBlock, similarQuery } from '../src/search.ts';
 
 const meta: LlmMeta = { model: 'm', promptTokens: 1, completionTokens: 1, costUsd: 0, latencyMs: 1 };
 
@@ -66,12 +66,13 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     notebook: [],
     lastDiary: null,
     books: [
-      { id: 'a', title: 'A', author: 'x', blurb: '', timesRead: 2 },
-      { id: 'b', title: 'B', author: 'y', blurb: '', timesRead: 0 },
+      { id: 'a', title: 'A', author: 'x', blurb: '', parts: 1, timesRead: 2, nextPart: 1 },
+      { id: 'b', title: 'B', author: 'y', blurb: '', parts: 1, timesRead: 0, nextPart: 1 },
     ],
     usageToday: { calls: 0, costUsd: 0 },
     mail: { waiting: 0, oldestSimTime: null, answers: 0, oldestAnswerSimTime: null },
     browsesToday: 0,
+    recentSearches: [],
     artToday: 0,
     chatsToday: 0,
     notesToday: 0,
@@ -683,4 +684,24 @@ test('your own character: checks and neighbours use its name, not Ampli the fox'
   });
   assert.match(prompt, /- Name: Bruno/);
   assert.match(prompt, /You live in Mausheim, a tiny town. You're usually at Park, 06:00-14:00./);
+});
+
+test('searches: the same question in other words counts as a repeat; a new angle does not', () => {
+  // Real repeats from one afternoon in town.
+  assert.ok(similarQuery('winter fish kills oxygen depletion fish behavior gasping at surface', 'winter fish kill hypoxia fish behavior before death gasping at surface ice'));
+  assert.ok(similarQuery('how does dissolved oxygen work under ice in winter ponds', 'how does dissolved oxygen work under ice in winter ponds fish survival'));
+  assert.ok(similarQuery('winter fish kills hypoxia what do fish do before dying behavior signs low oxygen', 'winter fish kills hypoxia what do fish do before dying behavior signs low oxygen'));
+  assert.ok(!similarQuery('how does a pond work in winter where does the water go', 'how to open a post box in a small town'));
+  assert.ok(!similarQuery('how do hedgehogs hibernate', 'winter fish kills oxygen depletion'));
+
+  const earlier = [{ query: 'how do hedgehogs hibernate', simTime: 1 }, { query: 'winter fish kills oxygen depletion fish behavior gasping at surface', takeaway: 'Low oxygen.', simTime: 2 }];
+  assert.equal(repeatedSearch('fish behavior winter kill gasping at surface oxygen', earlier)?.takeaway, 'Low oxygen.');
+  assert.equal(repeatedSearch('who painted the first pond picture', earlier), undefined);
+
+  const c = ctx(NOON);
+  c.recentSearches = earlier;
+  const prompt = decideUser(c, availableActivities(NOON, { canBrowse: true }));
+  assert.match(prompt, /What you already looked up at the internet café/);
+  assert.match(prompt, /- "winter fish kills oxygen depletion fish behavior gasping at surface": Low oxygen\./);
+  assert.doesNotMatch(decideUser(c, availableActivities(NOON)), /already looked up/, 'only when browsing is an option');
 });

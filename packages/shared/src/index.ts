@@ -6,3 +6,4 @@ export * from './art.ts';
 export * from './gyros.ts';
 export * from './species.ts';
 export * from './setup.ts';
+export * from './library.ts';

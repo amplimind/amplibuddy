@@ -13,6 +13,8 @@ export const WORLD_DIR = join(ROOT, 'world');
 export const DATA_DIR = process.env.AMPLI_DATA_DIR || join(ROOT, 'data');
 export const USER_WORLD_DIR = join(DATA_DIR, 'world');
 export const SETTINGS_FILE = join(DATA_DIR, 'settings.json');
+export const WORLD_LIBRARY_DIR = join(WORLD_DIR, 'library');
+export const USER_LIBRARY_DIR = join(DATA_DIR, 'library');
 
 /** Set up in the browser wizard; everything optional. */
 export interface Settings {
@@ -96,6 +98,11 @@ export function personaFile(): string {
 export function neighborsDir(): string {
   const own = join(USER_WORLD_DIR, 'neighbors');
   return existsSync(own) ? own : join(WORLD_DIR, 'neighbors');
+}
+
+/** Your library once you've edited it (the shipped books are copied in first), else the shipped one. */
+export function libraryDir(): string {
+  return existsSync(USER_LIBRARY_DIR) ? USER_LIBRARY_DIR : WORLD_LIBRARY_DIR;
 }
 
 export function writeText(file: string, text: string): void {

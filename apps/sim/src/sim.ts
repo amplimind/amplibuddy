@@ -1,6 +1,7 @@
 import type { BookWithText, EventBody, Neighbor, Persona, WorldEvent, WorldSnapshot } from '@ampli-world/shared';
 import { Engine, initialState } from './engine.ts';
 import type { GyrosBridge } from './gyros.ts';
+import type { ShelfBook } from './library.ts';
 import type { Store } from './store.ts';
 
 export interface SseMessage {
@@ -34,7 +35,7 @@ export class Sim {
 
   constructor(
     readonly store: Store,
-    readonly books: Map<string, BookWithText>,
+    readonly books: Map<string, ShelfBook>,
     readonly persona: Persona,
     readonly minutesPerSecond: number,
     readonly neighbors: Neighbor[] = [],

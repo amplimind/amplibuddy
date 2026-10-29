@@ -142,7 +142,8 @@ export type EventBody =
     }
   | { type: 'activity_finished'; data: { kind: ActivityKind; place: PlaceId } }
   | { type: 'walk_started'; data: { from: PlaceId; to: PlaceId } }
-  | { type: 'reading'; data: { bookId: string; title: string; takeaway: string; llm?: LlmMeta } }
+  /** `part`/`parts`: which part of a long book this was (absent for one-part books). */
+  | { type: 'reading'; data: { bookId: string; title: string; takeaway: string; part?: number; parts?: number; llm?: LlmMeta } }
   | { type: 'diary_written'; data: { day: number } }
   /** Public letters carry content; private (or held) ones carry only the id. */
   | {
@@ -213,10 +214,21 @@ export interface Book {
   title: string;
   author: string;
   blurb: string;
+  /** How many visits it takes to read it once (see READING_PART_CHARS). */
+  parts: number;
 }
 
 export interface BookWithText extends Book {
   text: string;
+}
+
+/** One part of a book, as the brain gets it for a reading session. */
+export interface BookPart extends Book {
+  /** 1-based. */
+  part: number;
+  text: string;
+  /** What the character noted on the previous parts of this read, oldest first. */
+  earlier: string[];
 }
 
 export interface UsageToday {
@@ -231,11 +243,14 @@ export interface BrainContext {
   recentEvents: WorldEvent[];
   notebook: string[];
   lastDiary: DiaryEntry | null;
-  books: (Book & { timesRead: number })[];
+  /** `nextPart`: where reading continues (1 = from the start). */
+  books: (Book & { timesRead: number; nextPart: number })[];
   usageToday: UsageToday;
   mail: MailStats;
   /** Web searches since 00:00 UTC, for the daily cap. */
   browsesToday: number;
+  /** The latest web searches (newest last), so the character doesn't look up the same thing again. */
+  recentSearches: { query: string; takeaway?: string; simTime: number }[];
   /** Artworks since 00:00 UTC, for the daily cap. */
   artToday: number;
   /** Chats started since 00:00 UTC, for the daily cap. */
@@ -262,6 +277,8 @@ export interface DiaryRequest {
 export interface ReadingRequest {
   bookId: string;
   takeaway: string;
+  /** The part that was read (1-based), as handed out by the sim. */
+  part?: number;
   llm?: LlmMeta;
 }
 

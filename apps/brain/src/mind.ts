@@ -73,7 +73,7 @@ import {
   type ModerationTarget,
 } from './prompts.ts';
 import { availableActivities, leastReadBook, offlineDecision, routineDecision } from './routine.ts';
-import { ollamaSearch, resultsBlock, searxngSearch, wikipediaSearch, withTopPage } from './search.ts';
+import { ollamaSearch, repeatedSearch, resultsBlock, searxngSearch, wikipediaSearch, withTopPage } from './search.ts';
 import { SimError, type SimClient } from './sim-client.ts';
 
 /** Sleep that starts before 06:00 still belongs to the previous day's diary. */
@@ -343,18 +343,34 @@ export class Mind {
     if (this.cfg.webSearch && !canBrowse) unavailable.push('browse: no more web searches today');
     if (!canPaint) unavailable.push("paint: you've painted enough for today");
     try {
-      const { args, meta } = await this.llm({
-        model: this.cfg.brainModel,
-        system: decideSystem(this.persona),
-        user: decideUser(ctx, kinds, unavailable),
-        tool: decideTool(
-          kinds,
-          ctx.books.map((b) => b.id),
-          present.map((n) => n.name),
-        ),
-        maxTokens: 300,
-      });
-      const decision = toDecision(args, meta, ctx, kinds);
+      const ask = async (notes: string[]) => {
+        const { args, meta } = await this.llm({
+          model: this.cfg.brainModel,
+          system: decideSystem(this.persona),
+          user: decideUser(ctx, kinds, notes),
+          tool: decideTool(
+            kinds,
+            ctx.books.map((b) => b.id),
+            present.map((n) => n.name),
+          ),
+          maxTokens: 300,
+        });
+        return toDecision(args, meta, ctx, kinds);
+      };
+      let decision = await ask(unavailable);
+      // The same question in other words: say so once and let it choose again.
+      const repeat = decision.plan.query ? repeatedSearch(decision.plan.query, ctx.recentSearches) : undefined;
+      if (repeat) {
+        console.log(`[brain] "${decision.plan.query}" repeats "${repeat.query}", asking again`);
+        const learned = repeat.takeaway ? ` and found: ${repeat.takeaway.slice(0, 200)}` : '';
+        decision = await ask([
+          ...unavailable,
+          `browse "${decision.plan.query}": you already looked that up as "${repeat.query}"${learned}. Use what you found, or look up something different`,
+        ]);
+        if (decision.plan.query && repeatedSearch(decision.plan.query, ctx.recentSearches)) {
+          throw new Error(`search "${decision.plan.query}" repeats an earlier one`);
+        }
+      }
       if (decision.plan.query) {
         // Checked before it becomes public (in the thought and on the map).
         const check = await this.moderate('search', decision.plan.query);
@@ -381,8 +397,9 @@ export class Mind {
       });
       const takeaway = typeof args.takeaway === 'string' ? args.takeaway.trim() : '';
       if (!takeaway) return;
-      await this.sim.reading({ bookId, takeaway, llm: meta });
-      console.log(`[brain] read "${book.title}": ${takeaway} (${cost(meta)})`);
+      await this.sim.reading({ bookId, takeaway, part: book.part, llm: meta });
+      const part = book.parts > 1 ? ` (part ${book.part}/${book.parts})` : '';
+      console.log(`[brain] read "${book.title}"${part}: ${takeaway} (${cost(meta)})`);
     } catch (err) {
       console.warn('[brain] reading failed:', (err as Error).message);
     }

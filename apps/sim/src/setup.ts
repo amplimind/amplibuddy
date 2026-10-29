@@ -9,6 +9,7 @@ import { stream } from 'hono/streaming';
 import {
   LOCAL_CONTEXT,
   LOOK_INFO,
+  MAX_PDF_BYTES,
   MAX_PERSONALITY_CHARS,
   MAX_SETUP_NAME_CHARS,
   MAX_SETUP_SPECIES_CHARS,
@@ -18,6 +19,7 @@ import {
   localAlias,
   GYROS_DEFAULTS,
   type GyrosProbe,
+  type LibraryBookDraft,
   lookOf,
   parseFrontmatter,
   parseHours,
@@ -40,6 +42,7 @@ import {
   writeSettings,
   writeText,
 } from '@ampli-world/shared/node';
+import { PdfSupportMissing, deleteBook, extractPdf, libraryEntry, saveBook, type ShelfBook } from './library.ts';
 import type { Store } from './store.ts';
 
 // The setup wizard and settings page. Only reachable from this Mac (or with the admin
@@ -78,6 +81,21 @@ export function canConfigure(c: Context, adminToken?: string): boolean {
   const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
   const host = (c.req.header('host') ?? '').replace(/:\d+$/, '').toLowerCase();
   return isLoopback(remote) && (!forwarded || isLoopback(forwarded)) && LOCAL_HOSTS.has(host);
+}
+
+/**
+ * The page that sent the request is this site, or another page on this machine (the dev
+ * server on :5173 proxies to the sim on :4300). Pages from anywhere else are refused.
+ */
+export function sameMachineOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin) return true;
+  try {
+    const from = new URL(origin);
+    const to = (host ?? '').replace(/:\d+$/, '').toLowerCase();
+    return from.host === host || (LOCAL_HOSTS.has(from.hostname) && LOCAL_HOSTS.has(to));
+  } catch {
+    return false;
+  }
 }
 
 /** One line, no frontmatter breakers. */
@@ -284,7 +302,8 @@ async function createAlias(model: string): Promise<string> {
   return alias;
 }
 
-export function registerSetup(app: Hono, opts: { adminToken?: string; store: Store }): void {
+export function registerSetup(app: Hono, opts: { adminToken?: string; store: Store; books?: Map<string, ShelfBook> }): void {
+  const books = opts.books ?? new Map<string, ShelfBook>();
   /** Public: whether to show the wizard, and whether this viewer may change things. */
   app.get('/api/setup/status', (c) => c.json({ complete: setupComplete(), canConfigure: canConfigure(c, opts.adminToken) }));
 
@@ -293,9 +312,11 @@ export function registerSetup(app: Hono, opts: { adminToken?: string; store: Sto
     if (!canConfigure(c, opts.adminToken)) return c.json({ error: 'settings can only be changed on this Mac' }, 403);
     if (c.req.method !== 'GET') {
       // JSON only (a plain form can't send it) and from this site, so other web pages can't change settings.
-      if (!c.req.header('content-type')?.includes('application/json')) return c.json({ error: 'JSON only' }, 415);
-      const origin = c.req.header('origin');
-      if (origin && new URL(origin).host !== c.req.header('host')) return c.json({ error: 'wrong origin' }, 403);
+      // PDFs come as application/pdf, which a web page can't send across sites without permission either.
+      const type = c.req.header('content-type') ?? '';
+      const pdf = c.req.path === '/api/setup/library/pdf' && type === 'application/pdf';
+      if (!pdf && !type.includes('application/json')) return c.json({ error: 'JSON only' }, 415);
+      if (!sameMachineOrigin(c.req.header('origin'), c.req.header('host'))) return c.json({ error: 'wrong origin' }, 403);
     }
     await next();
   });
@@ -308,6 +329,49 @@ export function registerSetup(app: Hono, opts: { adminToken?: string; store: Sto
     if (body.residents && !Array.isArray(body.residents)) return c.json({ error: 'residents must be a list' }, 400);
     applySetup(body, opts.store);
     return c.json({ ok: true, restarting: true });
+  });
+
+  // --- Library: books take effect at once, no restart ---
+
+  app.get('/api/setup/library', (c) =>
+    c.json([...books.values()].map(libraryEntry).sort((a, b) => a.title.localeCompare(b.title))),
+  );
+
+  app.get('/api/setup/library/:id', (c) => {
+    const book = books.get(c.req.param('id'));
+    if (!book) return c.json({ error: 'no such book' }, 404);
+    const draft: LibraryBookDraft = { id: book.id, title: book.title, author: book.author, blurb: book.blurb, text: book.text };
+    return c.json(draft);
+  });
+
+  app.post('/api/setup/library', async (c) => {
+    const body = (await c.req.json().catch(() => null)) as LibraryBookDraft | null;
+    const book = body && typeof body === 'object' ? saveBook(body, books) : null;
+    return book ? c.json(libraryEntry(book)) : c.json({ error: 'a book needs a title and some text' }, 400);
+  });
+
+  app.delete('/api/setup/library/:id', (c) =>
+    deleteBook(c.req.param('id'), books) ? c.json({ ok: true }) : c.json({ error: 'no such book' }, 404),
+  );
+
+  /** Reads the text out of an uploaded PDF, to check and complete before it goes on the shelf. */
+  app.post('/api/setup/library/pdf', async (c) => {
+    const length = Number(c.req.header('content-length') ?? 0);
+    if (length > MAX_PDF_BYTES) return c.json({ error: `PDFs up to ${MAX_PDF_BYTES / 1024 / 1024} MB` }, 413);
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.length > MAX_PDF_BYTES) return c.json({ error: `PDFs up to ${MAX_PDF_BYTES / 1024 / 1024} MB` }, 413);
+    if (new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') return c.json({ error: "that's not a PDF" }, 400);
+    const name = decodeURIComponent(c.req.header('x-file-name') ?? 'document.pdf');
+    try {
+      const extract = await extractPdf(bytes, name);
+      if (!extract.text) {
+        return c.json({ error: 'No text found in this PDF. Scanned pages are images; they would need text recognition first.' }, 422);
+      }
+      return c.json(extract);
+    } catch (err) {
+      if (err instanceof PdfSupportMissing) return c.json({ error: err.message }, 501);
+      return c.json({ error: `Couldn't read this PDF: ${(err as Error).message}` }, 422);
+    }
   });
 
   app.get('/api/setup/ollama', async (c) => c.json(await ollamaStatus()));

@@ -165,3 +165,33 @@ export function resultsBlock(hits: SearchHit[]): string {
   if (hits.length === 0) return '(no results)';
   return hits.map((h, i) => `[${i + 1}] ${h.title}\n${h.content}`).join('\n\n');
 }
+
+// --- Not the same search twice -----------------------------------------------------------
+
+const STOPWORDS = new Set(
+  'a an and are at be before by can do does for from how in into is it its of on or that the their them this to under what when where which who why with'.split(' '),
+);
+
+function searchWords(query: string): Set<string> {
+  return new Set(
+    query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+      .map((w) => (w.length > 4 && w.endsWith('s') ? w.slice(0, -1) : w)),
+  );
+}
+
+/** Same question in other words? Enough shared words, or one query almost inside the other. */
+export function similarQuery(a: string, b: string): boolean {
+  const x = searchWords(a);
+  const y = searchWords(b);
+  if (x.size === 0 || y.size === 0) return false;
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return shared / (x.size + y.size - shared) >= 0.4 || shared / Math.min(x.size, y.size) >= 0.75;
+}
+
+/** The earlier search this one repeats, if any. */
+export function repeatedSearch<T extends { query: string }>(query: string, earlier: T[]): T | undefined {
+  return [...earlier].reverse().find((e) => similarQuery(query, e.query));
+}

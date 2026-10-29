@@ -15,6 +15,9 @@ import {
   MAX_DOODLE_BYTES,
   REPORTS_TO_HOLD,
   cleanSvg,
+  readingProgress,
+  splitIntoParts,
+  type BookPart,
   repairSvg,
   MAX_MEMORY_CHARS,
   MAX_QUERY_CHARS,
@@ -31,7 +34,7 @@ import {
   type Thought,
   type WebSource,
 } from '@ampli-world/shared';
-import { withoutText } from './library.ts';
+import { withoutText, type ShelfBook } from './library.ts';
 import { registerSetup } from './setup.ts';
 import type { Sim, SseMessage } from './sim.ts';
 
@@ -214,7 +217,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
 
   app.get('/api/state', (c) => c.json(sim.snapshot()));
 
-  registerSetup(app, { adminToken: opts.adminToken, store: sim.store });
+  registerSetup(app, { adminToken: opts.adminToken, store: sim.store, books: sim.books });
 
   app.get('/api/events', (c) => {
     const limit = Math.min(200, Number(c.req.query('limit') ?? 80) || 80);
@@ -230,6 +233,9 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     const counts = store.readCounts();
     return c.json([...books.values()].map((b) => ({ ...withoutText(b), timesRead: counts.get(b.id) ?? 0 })));
   });
+
+  /** Where reading a book continues, from what was read before. */
+  const progressOf = (book: ShelfBook) => readingProgress(store.readingsOf(book.id), book.parts);
 
   // --- Mailbox (public) ---
 
@@ -390,10 +396,15 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       recentEvents: store.recentEvents(30),
       notebook: store.notebook(),
       lastDiary: store.lastDiary(),
-      books: [...books.values()].map((b) => ({ ...withoutText(b), timesRead: counts.get(b.id) ?? 0 })),
+      books: [...books.values()].map((b) => ({
+        ...withoutText(b),
+        timesRead: counts.get(b.id) ?? 0,
+        nextPart: progressOf(b).next,
+      })),
       usageToday: store.usageToday(),
       mail: store.mailStats(),
       browsesToday: store.countEventsToday('browsed'),
+      recentSearches: store.recentSearches(),
       artToday: store.countArtToday(),
       chatsToday: store.countActivityToday('chat'),
       // Per sim day: this limit keeps the board from flooding, it isn't about cost.
@@ -464,9 +475,13 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json(store.eventsSince(since));
   });
 
+  /** The part of a book to read now (long books are read one part per visit). */
   app.get('/api/brain/books/:id', (c) => {
     const book = books.get(c.req.param('id'));
-    return book ? c.json(book) : c.json({ error: 'no such book' }, 404);
+    if (!book) return c.json({ error: 'no such book' }, 404);
+    const { next, earlier } = progressOf(book);
+    const part: BookPart = { ...withoutText(book), part: next, text: splitIntoParts(book.text)[next - 1] ?? '', earlier };
+    return c.json(part);
   });
 
   app.post('/api/brain/thinking', (c) => {
@@ -511,7 +526,17 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     if (!book || !takeaway) return c.json({ error: 'bad reading' }, 400);
     const llm = parseLlm(body.llm);
     if (llm) store.recordLlmCall('reading', llm);
-    sim.log({ type: 'reading', data: { bookId: book.id, title: book.title, takeaway, ...(llm ? { llm } : {}) } });
+    const part = typeof body.part === 'number' && Number.isInteger(body.part) && body.part >= 1 && body.part <= book.parts ? body.part : null;
+    sim.log({
+      type: 'reading',
+      data: {
+        bookId: book.id,
+        title: book.title,
+        takeaway,
+        ...(part && book.parts > 1 ? { part, parts: book.parts } : {}),
+        ...(llm ? { llm } : {}),
+      },
+    });
     return c.json({ ok: true });
   });
 

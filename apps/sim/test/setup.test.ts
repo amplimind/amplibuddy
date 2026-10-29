@@ -80,6 +80,7 @@ test('setup: only this Mac (or the admin) may change things, and only with JSON 
   assert.equal((await post({ ...local, 'x-forwarded-for': '10.0.0.7' })).status, 403, 'proxied from elsewhere');
   assert.equal((await post({ ...local, 'content-type': 'text/plain' })).status, 415, 'a plain form post');
   assert.equal((await post({ ...local, origin: 'https://evil.example' })).status, 403, 'another web page');
+  assert.equal((await post({ ...local, origin: 'http://localhost:5173' })).status, 200, 'the dev server on this machine');
   assert.equal((await post({ ...local, host: 'town.example', 'x-admin-token': 'admin-secret' })).status, 200, 'admin');
 
   const status = (await (await app.request('/api/setup/status', { headers: { host: 'town.example' } })).json()) as {

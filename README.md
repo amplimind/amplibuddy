@@ -9,7 +9,7 @@ It's a door-opener: people get used to AI by watching an agent behave instead of
 - [What you're looking at](#what-youre-looking-at)
 - [Set it up on your Mac](#set-it-up-on-your-mac)
 - [Everyday use](#everyday-use) · [If something's off](#if-somethings-off)
-- [The animals](#the-animals) · [Personalities](#personalities) · [Neighbours](#neighbours)
+- [The animals](#the-animals) · [Personalities](#personalities) · [Neighbours](#neighbours) · [The library](#the-library)
 - [GyrOS workshop (optional)](#gyros-workshop-optional)
 - [For developers](#for-developers)
 
@@ -72,7 +72,7 @@ A Terminal window opens. The first start downloads Node.js (only if your Mac doe
 
 - **Stop**: close the Terminal window (or press Ctrl+C in it). The town pauses; nothing is lost.
 - **Start again**: double-click `Ampli World.command`. Later starts take seconds.
-- **Change anything**: **⚙️** at the top right: character, personality, brain, neighbours, how fast time goes, GyrOS. Saving restarts the town for a few seconds; memories and the diary stay. To run the whole wizard again, open http://localhost:4300/?setup.
+- **Change anything**: **⚙️** at the top right: character, personality, brain, neighbours, the library, how fast time goes, GyrOS. Saving restarts the town for a few seconds; memories and the diary stay. To run the whole wizard again, open http://localhost:4300/?setup.
 - **Speed**: *calm* (a day takes 4 hours, the default), *lively* (24 minutes) or *real time*. Faster means more thoughts per hour, which in the cloud costs more.
 - **Update**: download the new ZIP, unpack it, and move the `data` folder from your old folder into the new one. That folder is your whole town: settings, characters, memories, diary, letters, paintings.
 - **Start over**: stop the town and delete the `data` folder. The wizard greets you on the next start.
@@ -144,6 +144,16 @@ Templates are a starting point; change any word. They live in `world/templates/`
 - Your character can **chat with whoever is around**. Every line is its own model call that only sees that speaker's side: your character's notebook and days, or the neighbour's notes. After a chat the neighbour rewrites its notes, so it remembers next time.
 - Chats fill the *company* need, but letters from real people still matter most.
 - Up to 12 neighbours. *Lives in town* unticked keeps one on file but away; *Remove* deletes it and what it remembered.
+
+## The library
+
+Your character reads in the library, and what it reads ends up in its notes, its diary and what it looks up next. Give it your own reading in **⚙️ → Library**:
+
+- **Write a text**: a title, an author, one sentence about what it is (your character sees that when it picks what to read) and the text itself: a story, an article, notes about your team, anything.
+- **Upload a PDF**: the text is read out of the PDF; you check the title, add the sentence and put it on the shelf. It needs PDFs with real text (most are); scanned pages are images and come out empty. Up to 30 MB.
+- **Edit or remove** any book, including the three the town comes with.
+
+Long texts are read **in parts**, one part (about ten pages) per visit to the library. Your character picks up where it stopped and sees its notes on the earlier parts, so even a whole book fits a small local model. The feed shows which part it read. Changes count at once, no restart needed. Your books are in `data/library/`.
 
 ## GyrOS workshop (optional)
 
@@ -246,7 +256,7 @@ Three processes, on purpose (same split as Pino):
 
 **Memory** is just text: the event log, a nightly diary, and a notebook of at most 12 notes that the character rewrites every night (the `REFLECT_MODEL` call). That rewrite is the only long-term memory, so forgetting is part of the design.
 
-**Reading is real**: when the character reads, the model gets the full book text from `world/library/` and writes a takeaway, which feeds into that night's notebook rewrite.
+**Reading is real**: when the character reads, the model gets the book text and writes a takeaway, which feeds into that night's notebook rewrite. Long books are split into parts of ~24k characters (`READING_PART_CHARS`), one per visit; the sim hands out the next part with the notes on the earlier ones (`/api/brain/books/:id`). PDFs are read with pdf.js ([unpdf](https://github.com/unjs/unpdf), code evaluation off) in the sim.
 
 **Company**: a fourth need, filled by letters, by notes pinned on the notice board inviting people to write, and by chats with neighbours. Neighbours are separate AI characters with their own persona, place, hours and notes (`world/neighbors/*.md` by default, `data/world/neighbors/` once edited in the app). Only the neighbours listed exist, and the prompt says so, so the character doesn't imagine strangers.
 
@@ -261,7 +271,7 @@ Three processes, on purpose (same split as Pino):
 | Character, personality, neighbours, brain, speed, GyrOS | **⚙️ in the app** (or the wizard). Saved in `data/world/` and `data/settings.json`; the town restarts by itself |
 | The defaults a new town starts with | `world/persona.md`, `world/neighbors/*.md` |
 | Personality templates | `world/templates/characters/*.md`, `world/templates/residents/*.md` (frontmatter `title`, `description`; residents also `name`, `species`, `look`, `place`, `hours`) |
-| Library books | `world/library/*.md` with `title`, `author`, `blurb` frontmatter; restart the sim |
+| Library books | ⚙️ → Library (saved in `data/library/`, live). The shipped ones: `world/library/*.md` with `title`, `author`, `blurb` frontmatter |
 | Places, activities, need rates, map | `packages/shared/src/world.ts` |
 | Prompts | `apps/brain/src/prompts.ts` |
 | Drawing | `apps/web/src/town.ts`; the animals in `apps/web/src/critters.ts` |

@@ -19,6 +19,7 @@ import {
   type SetupState,
 } from '@ampli-world/shared';
 import { drawCritter } from './critters.ts';
+import { LibraryEditor } from './Library.tsx';
 
 // The setup wizard (first start) and the settings page (⚙️ later). Both edit the same
 // things and save them in one go; the town then restarts with the new setup.
@@ -875,7 +876,7 @@ function Wizard({ state }: { state: SetupState }) {
 
 // --- Settings ----------------------------------------------------------------------------
 
-const TABS = ['Character', 'Personality', 'Brain', 'Neighbours', 'Extras'] as const;
+const TABS = ['Character', 'Personality', 'Brain', 'Neighbours', 'Library', 'Extras'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -912,6 +913,7 @@ function Settings({ state }: { state: SetupState }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingNeighbour, setEditingNeighbour] = useState(false);
+  const [editingBook, setEditingBook] = useState(false);
 
   async function save() {
     setSaving(true);
@@ -951,12 +953,13 @@ function Settings({ state }: { state: SetupState }) {
             onBusy={setEditingNeighbour}
           />
         )}
+        {tab === 'Library' && <LibraryEditor name={persona.name || 'your character'} onBusy={setEditingBook} />}
         {tab === 'Extras' && <ExtrasForm speed={speed} gyros={gyros} onSpeed={setSpeed} onGyros={setGyros} />}
       </div>
       {error && <p className="error">{error}</p>}
       <div className="setup-nav">
         <span className="hint">Saving restarts the town for a few seconds. Memories and the diary stay.</span>
-        <button type="button" onClick={() => void save()} disabled={saving || editingNeighbour || !persona.name.trim()}>
+        <button type="button" onClick={() => void save()} disabled={saving || editingNeighbour || editingBook || !persona.name.trim()}>
           {saving ? 'Restarting…' : 'Save'}
         </button>
       </div>

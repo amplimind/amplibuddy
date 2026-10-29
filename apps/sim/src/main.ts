@@ -3,6 +3,7 @@ import { VISITOR_RETENTION_DAYS, formatClock } from '@ampli-world/shared';
 import { config, loadNeighbors, loadPersona } from './config.ts';
 import { GyrosBridge } from './gyros.ts';
 import { createApp } from './http.ts';
+import { libraryDir } from '@ampli-world/shared/node';
 import { loadLibrary } from './library.ts';
 import { Sim } from './sim.ts';
 import { Store } from './store.ts';
@@ -12,7 +13,7 @@ const SAVE_EVERY_TICKS = 10;
 const RETENTION_SWEEP_MS = 3_600_000;
 
 const store = new Store(config.dbFile);
-const books = loadLibrary(config.libraryDir);
+const books = loadLibrary(libraryDir());
 const persona = loadPersona();
 const sim = new Sim(store, books, persona, config.minutesPerSecond, loadNeighbors());
 
