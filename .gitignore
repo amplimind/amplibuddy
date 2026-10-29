@@ -1,0 +1,10 @@
+node_modules
+dist
+data/*.db
+data/*.db-*
+.env
+.DS_Store
+*.log
+# Claude Code internals and personal settings
+.claude/.cc-writes
+.claude/settings.local.json

@@ -1,0 +1,16 @@
+{
+  "name": "@ampli-world/sim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node --import tsx src/main.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@ampli-world/shared": "*",
+    "@hono/node-server": "^2.1.4",
+    "hono": "^4.7.0"
+  }
+}

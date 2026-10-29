@@ -1,0 +1,29 @@
+{
+  "name": "ampli-world",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n sim,brain,web -c blue,magenta,green \"npm:dev:sim\" \"npm:dev:brain\" \"npm:dev:web\"",
+    "dev:sim": "npm run dev --workspace=apps/sim",
+    "dev:brain": "npm run dev --workspace=apps/brain",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "start": "concurrently -k -n sim,brain -c blue,magenta \"npm run start --workspace=apps/sim\" \"npm run start --workspace=apps/brain\"",
+    "test": "node --import tsx --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.2"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
