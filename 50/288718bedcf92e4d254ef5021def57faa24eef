@@ -1,0 +1,141 @@
+apps/brain/src/sim-client.ts
+  s_2cca0dc321ad0c::t_bff02ab44dc753 14,63-64
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 7,13,65-73
+  s_2cca0dc321ad0c::t_a301fb65ab2010 74
+packages/shared/test/world.test.ts
+  s_2cca0dc321ad0c::t_280a4ddd118438 60-65
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_0809e555ff3230 39,41,385,387,539-571
+  s_2cca0dc321ad0c::t_401d2e0eedc3c7 40,310-313,315-319,386,525-531,537-538
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 314,532-536
+  s_2cca0dc321ad0c::t_b388f253abbeb4 572
+packages/shared/src/world.ts
+  s_2cca0dc321ad0c::t_09af29c2f61e5f 151,159,175
+  s_2cca0dc321ad0c::t_c795e3f75f70f1 92,113,121,145,153,161,177,185,196-202,210
+  s_2cca0dc321ad0c::t_0de2dd8aec62c4 9-13,265-267
+  s_2cca0dc321ad0c::t_76574b5f7bfe13 43,83,129,137,166-167,169,186-195
+README.md
+  s_2cca0dc321ad0c::t_c93efcf9eb2a4d 19-21,24,26-27,38-39,86-88
+  s_2cca0dc321ad0c::t_92c2c0a4a9ff5e 66-67,96-97
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 22-23,25,28-37
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_bff02ab44dc753 56,359-386
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 7-8,388-394
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 387
+  s_2cca0dc321ad0c::t_8cd33044d1695e 406-412
+  s_2cca0dc321ad0c::t_19d90937159f68 16
+  s_2cca0dc321ad0c::t_09af29c2f61e5f 395-405,413
+  s_2cca0dc321ad0c::t_5ed550decff81c 4-6,9-14,118-120
+  s_2cca0dc321ad0c::t_227224c1d426c3 15,22,41,55,57,76-77,326-358
+packages/shared/src/mood.ts
+  s_2cca0dc321ad0c::t_c795e3f75f70f1 11,18
+apps/web/src/Mailbox.tsx
+  s_2cca0dc321ad0c::t_9f18f2099e6b2b 191
+  s_2cca0dc321ad0c::t_89f9e3163e7780 8,13,178,188-190,192-193,249-254
+apps/sim/test/mail.test.ts
+  s_2cca0dc321ad0c::t_6fa802659a67e8 443-471
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 484-485,487
+  s_2cca0dc321ad0c::t_401d2e0eedc3c7 472-483,486,488
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_bff02ab44dc753 46-49,157,195-200,251,257,382-404,406
+  s_2cca0dc321ad0c::t_09b2f3502052f8 152-153,231-232,253,505-506,511-512
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 21-26,205,405,566-571,573-596
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 1,19,27,30,40-44,57,59,128-139,156,169,201-204,250,252,254-256,258,331-381
+  s_2cca0dc321ad0c::t_5ed550decff81c 546-547,563
+  s_2cca0dc321ad0c::t_29f58fd2c8b19c 206,407
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_c795e3f75f70f1 19,33-34,86-93,98,134-135,192-193,196-197,247-259
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 136-137
+  s_2cca0dc321ad0c::t_76574b5f7bfe13 20-21,194-195,260-267
+world/neighbors/hedda.md
+  s_2cca0dc321ad0c::t_76574b5f7bfe13 5
+  s_2cca0dc321ad0c::t_264515959319fc 1-4,6-21
+apps/brain/src/main.ts
+  s_2cca0dc321ad0c::t_78262544574e7a 11
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 2,7
+  s_2cca0dc321ad0c::t_5ed550decff81c 10,12-14
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_b8a3b36814c1be 12,164,783-805
+  s_2cca0dc321ad0c::t_89f9e3163e7780 806-819
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_3db9e706ef02d1 67
+apps/web/src/useWorld.ts
+  s_2cca0dc321ad0c::t_b8a3b36814c1be 15-16,71-74
+apps/sim/test/engine.test.ts
+  s_2cca0dc321ad0c::t_6fa802659a67e8 3-11,138-155,159-161
+  s_2cca0dc321ad0c::t_0de2dd8aec62c4 48,112-137
+  s_2cca0dc321ad0c::t_5178c8670dd25f 156-158
+apps/sim/src/config.ts
+  s_2cca0dc321ad0c::t_6fa802659a67e8 1
+  s_2cca0dc321ad0c::t_0809e555ff3230 3-4,20,32,37-41,45-47
+  s_2cca0dc321ad0c::t_401d2e0eedc3c7 33-36,42-44
+  s_2cca0dc321ad0c::t_636a1af540273d 48
+apps/sim/src/engine.ts
+  s_2cca0dc321ad0c::t_0de2dd8aec62c4 59-60,66-79,124
+  s_2cca0dc321ad0c::t_0809e555ff3230 30,64-65,182
+.env.example
+  s_2cca0dc321ad0c::t_c93efcf9eb2a4d 11-13,16,21-23,34-38,41,43,45
+  s_2cca0dc321ad0c::t_92c2c0a4a9ff5e 39
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 14-15,17-20
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_5ed550decff81c 5,13-15,28-37,48-49
+  s_2cca0dc321ad0c::t_bff02ab44dc753 53,82-84
+  s_2cca0dc321ad0c::t_8cd33044d1695e 63-65
+  s_2cca0dc321ad0c::t_78262544574e7a 16,20-21,23,25-26,45-46,51-52
+  s_2cca0dc321ad0c::t_09b2f3502052f8 17-19,22,24,50
+  s_2cca0dc321ad0c::t_19d90937159f68 6
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 40-44
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 1-2,66-81,85-87
+apps/sim/src/main.ts
+  s_2cca0dc321ad0c::t_0809e555ff3230 3,16
+world/persona.md
+  s_2cca0dc321ad0c::t_72c78e711c8499 6-156
+apps/sim/src/sim.ts
+  s_2cca0dc321ad0c::t_0809e555ff3230 1,37,52
+  s_2cca0dc321ad0c::t_0de2dd8aec62c4 43
+apps/brain/src/routine.ts
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 37,64,116
+  s_2cca0dc321ad0c::t_bff02ab44dc753 38,55,65
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 181-183
+  s_2cca0dc321ad0c::t_89f9e3163e7780 180,184-192,346-350
+  s_2cca0dc321ad0c::t_3db9e706ef02d1 8,290,352-362
+  s_2cca0dc321ad0c::t_b8a3b36814c1be 108,193-201,351
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_b1f1bb6926ce9a 91-93,462
+  s_2cca0dc321ad0c::t_09af29c2f61e5f 123-132,180,218-219,229
+  s_2cca0dc321ad0c::t_19d90937159f68 14,35-47
+  s_2cca0dc321ad0c::t_168b26e0d6a9d1 94-97,235,565-671
+  s_2cca0dc321ad0c::t_bff02ab44dc753 30,90,212-217,220,228,453,460-461,463,672-711
+  s_2cca0dc321ad0c::t_e552e150194509 103-122,191-192
+  s_2cca0dc321ad0c::t_f232ec645cda67 48
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_0809e555ff3230 267-286
+apps/web/src/town.ts
+  s_2cca0dc321ad0c::t_b8a3b36814c1be 87,589-624,834-837,884-885
+  s_2cca0dc321ad0c::t_89f9e3163e7780 88
+apps/brain/src/llm.ts
+  s_2cca0dc321ad0c::t_e2f759aa3d9e11 191-200
+  s_2cca0dc321ad0c::t_5ed550decff81c 3-12,32-37,84,86,90-91,94,99-100,117-118,136,213-215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50288718bedcf92e4d254ef5021def57faa24eef",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
