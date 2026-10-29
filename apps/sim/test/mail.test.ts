@@ -485,6 +485,11 @@ test('notes: pinned ones are public, held ones never appear', async () => {
   assert.deepEqual(held.map((e) => e.data), [{ held: true }], 'held notes leave a trace without their text');
   const ctx = (await (await t.brain('/api/brain/context')).json()) as { notesToday: number };
   assert.equal(ctx.notesToday, 2, 'held notes count towards the cap too');
+
+  // The note cap is per sim day: a new sim day starts a fresh count.
+  t.sim.engine.advance(24 * 60);
+  const next = (await (await t.brain('/api/brain/context')).json()) as { notesToday: number };
+  assert.equal(next.notesToday, 0);
 });
 
 // --- Ampli asks ------------------------------------------------------------------------------

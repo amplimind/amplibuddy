@@ -9,6 +9,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import {
   LETTERS_PER_CHECK,
+  MINUTES_PER_DAY,
   MAX_ART_TITLE_CHARS,
   MAX_CAPTION_CHARS,
   MAX_DOODLE_BYTES,
@@ -391,7 +392,8 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       browsesToday: store.countEventsToday('browsed'),
       artToday: store.countArtToday(),
       chatsToday: store.countActivityToday('chat'),
-      notesToday: store.countEventsToday('note_posted'),
+      // Per sim day: this limit keeps the board from flooding, it isn't about cost.
+      notesToday: store.countEventsSinceSim('note_posted', Math.floor(engine.simTime / MINUTES_PER_DAY) * MINUTES_PER_DAY),
       neighborNotes: Object.fromEntries(sim.neighbors.map((n) => [n.id, store.neighborNotes(n.id)])),
     };
     return c.json(context);

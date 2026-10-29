@@ -204,7 +204,7 @@ export interface BrainContext {
   artToday: number;
   /** Chats started since 00:00 UTC, for the daily cap. */
   chatsToday: number;
-  /** Notice-board notes since 00:00 UTC, for the daily cap. */
+  /** Notice-board notes since the start of the current sim day, for the daily cap. */
   notesToday: number;
   /** Each neighbour's own notes (about Ampli and the town), keyed by neighbour id. */
   neighborNotes: Record<string, string[]>;

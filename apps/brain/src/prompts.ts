@@ -238,7 +238,7 @@ Keep it fresh: no phrases, images or running motifs from your recent thoughts, a
 Answer by calling the \`decide\` tool once.`;
 }
 
-export function decideUser(ctx: BrainContext, kinds: ActivityKind[]): string {
+export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable: string[] = []): string {
   const { simTime, agent } = ctx.snapshot;
   const place = agent.place ? PLACES[agent.place] : null;
   const n = agent.needs;
@@ -309,7 +309,11 @@ What happened recently (oldest first):
 ${recent.length > 0 ? recent.join('\n') : '(nothing yet — you just woke up in this town)'}
 
 ${lastThoughtsBlock(ctx)}What you can do (walking to another place takes a few minutes):
-${options}
+${options}${
+    unavailable.length > 0
+      ? `\n\nNot possible right now (if you were planning one of these, let it go or find another way):\n${unavailable.map((u) => `- ${u}`).join('\n')}`
+      : ''
+  }
 
 Books in the library:
 ${books || '(the shelves are empty)'}`;

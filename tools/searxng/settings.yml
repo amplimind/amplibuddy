@@ -6,6 +6,10 @@ use_default_settings: true
 server:
   limiter: false
   image_proxy: false
+outgoing:
+  # Engines get a bit more time than the default 3 s before they count as failed.
+  request_timeout: 6.0
+  max_request_timeout: 10.0
 search:
   safe_search: 1
   formats:

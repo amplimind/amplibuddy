@@ -43,7 +43,7 @@ Thinking is switched off (`reasoning_effort: none`). A model that answers in pro
 | only `OPENROUTER_API_KEY` | OpenRouter's web search (real web, ~$0.0075 per search, capped by `WEB_SEARCHES_PER_DAY`) |
 | neither | Wikipedia (no key; fine for facts, weak for open questions) |
 
-They're tried in that order: if one fails (no credits, outage), the next one takes over. `WEB_SEARCH_PROVIDER=ollama|openrouter|wikipedia` forces one.
+They're tried in that order: if one fails (no credits, outage), the next one takes over, after one retry. With SearXNG configured, the only fallback is Wikipedia, so nothing paid is used behind your back. `WEB_SEARCH_PROVIDER=ollama|openrouter|wikipedia` forces one.
 
 Without an `OPENROUTER_API_KEY` (and no `LLM_BASE_URL`), the brain runs **offline**: simple rules and scoring, canned thoughts, no LLM calls. That's enough to work on the world and the UI.
 
@@ -102,7 +102,7 @@ Three processes, on purpose (same split as Pino):
 | `WEB_SEARCHES_PER_DAY` | `20` | Daily cap (UTC). Each search costs about $0.0075, so the default cap is at most ~$0.15/day |
 | `WEB_EXCLUDE_DOMAINS` | – | Comma-separated domains Ampli never gets results from (`reddit.com,*.example.com`) |
 | `ART_PER_DAY` | `10` | Artworks per day (UTC) in the art studio, made with `REFLECT_MODEL` |
-| `NOTES_PER_DAY` | `4` | Notes Ampli may pin on the notice board per day |
+| `NOTES_PER_DAY` | unlimited | Optional cap on notice-board notes per sim day |
 | `CHATS_PER_DAY` | `12` | Chats with neighbours per day (only with an active neighbour) |
 | `LLM_DAILY_BUDGET_USD` | `2` | Hard cap per UTC day, then offline. Uses OpenRouter's reported `usage.cost` |
 | `LLM_MAX_CALLS_PER_HOUR` | `120` | Guards against runaway loops |

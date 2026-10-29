@@ -23,6 +23,8 @@ function searchProviders(): SearchProvider[] {
   const forced = process.env.WEB_SEARCH_PROVIDER;
   if (forced === 'openrouter' || forced === 'ollama' || forced === 'wikipedia') return [forced];
   if (forced === 'searxng') return ['searxng'];
+  // A local SearXNG means "search for free": never fall back to a paid search silently.
+  if (process.env.SEARXNG_URL && !openRouter) return ['searxng', 'wikipedia'];
   const order: SearchProvider[] = [];
   if (openRouter) order.push('openrouter');
   if (process.env.SEARXNG_URL) order.push('searxng');
@@ -92,7 +94,8 @@ export const config = {
       : costLimit('WEB_SEARCHES_PER_DAY', 20),
   artPerDay: costLimit('ART_PER_DAY', 10),
   chatsPerDay: costLimit('CHATS_PER_DAY', 12),
-  notesPerDay: Number(process.env.NOTES_PER_DAY ?? 4),
+  // No limit by default: notes are Ampli's way to reach people. Set NOTES_PER_DAY to cap them.
+  notesPerDay: process.env.NOTES_PER_DAY ? Number(process.env.NOTES_PER_DAY) : Infinity,
   webExcludeDomains: (process.env.WEB_EXCLUDE_DOMAINS ?? '')
     .split(',')
     .map((d) => d.trim())

@@ -189,7 +189,7 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     place: 'plaza',
     verb: 'pinning a note to the notice board',
     description:
-      'Ask the people who watch you for something you need or want to know (an answer, an idea, a recommendation, company), or just share a thought. Pinned on the notice board at the plaza; they can answer you directly.',
+      'Write to the people who watch you: a note, a question (an answer, an idea, a recommendation, company), or a few lines to someone who wrote to you, e.g. answering their letter. Pinned on the notice board at the plaza; they can answer you directly.',
     minutes: 20,
     rates: { energy: -2, satiety: -3, fun: 8, social: 30 },
   },

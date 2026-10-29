@@ -21,7 +21,16 @@ import {
   reasoningFields,
   reasoningParam,
 } from '../src/llm.ts';
-import { chatPause, diaryDay, offlineDiary, toDecision, toReply, toVerdict } from '../src/mind.ts';
+import {
+  chatPause,
+  diaryDay,
+  isAccountError,
+  offlineDiary,
+  searchSkipMs,
+  toDecision,
+  toReply,
+  toVerdict,
+} from '../src/mind.ts';
 import { ampliChatUser, buildPersonaPrompt, decideUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, resultsBlock } from '../src/search.ts';
@@ -548,4 +557,19 @@ test('page reading: only public web addresses, visible text only', () => {
     htmlToText('<html><head><title>x</title></head><body><script>evil()</script><p>Water &amp; sound&#33;</p><style>p{}</style></body></html>'),
     'Water & sound!',
   );
+});
+
+test('search providers: hiccups are skipped briefly, account trouble for an hour', () => {
+  assert.ok(isAccountError(new Error('Ollama web search 402: Add usage credits to use web search')));
+  assert.ok(isAccountError(new Error('OpenRouter 401: unauthorized')));
+  assert.ok(!isAccountError(new Error('searxng found nothing for "x"')));
+  assert.ok(!isAccountError(new Error('The operation was aborted due to timeout')));
+  assert.equal(searchSkipMs(new Error('searxng found nothing')), 300_000);
+  assert.equal(searchSkipMs(new Error('402 credits')), 3_600_000);
+});
+
+test('blocked options are explained, not silently missing', () => {
+  const p = decideUser(ctx(NOON), availableActivities(NOON), ['post_note: the board is full until tomorrow']);
+  assert.match(p, /Not possible right now \(if you were planning one of these, let it go or find another way\):\n- post_note: the board is full until tomorrow/);
+  assert.doesNotMatch(decideUser(ctx(NOON), availableActivities(NOON)), /Not possible right now/);
 });

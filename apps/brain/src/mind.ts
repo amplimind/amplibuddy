@@ -2,6 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   MAX_QUERY_CHARS,
   dayOf,
+  formatHours,
   neighborPresent,
   formatTime,
   isActivityKind,
@@ -140,6 +141,16 @@ export function chatPause(ctx: BrainContext, startedRealMs: number, endsAt: numb
   return Math.round(Math.min(5, Math.max(0.8, seconds)) * 1000);
 }
 
+/** No credits, bad key, forbidden: retrying soon won't help. */
+export function isAccountError(err: unknown): boolean {
+  return err instanceof Error && /\b(401|402|403)\b|credits|unauthori[sz]ed|forbidden/i.test(err.message);
+}
+
+/** How long to skip a search provider after it failed: long for account trouble, short for hiccups. */
+export function searchSkipMs(err: unknown): number {
+  return isAccountError(err) ? 3_600_000 : 300_000;
+}
+
 /** After a failed moderation call, wait this long before retrying the queue. */
 const MODERATION_BACKOFF_MS = 60_000;
 
@@ -263,11 +274,24 @@ export class Mind {
       canChat,
       canPostNote,
     });
+    // Say why something is missing, so Ampli can let go of a plan instead of circling it.
+    const unavailable: string[] = [];
+    if (!canPostNote) unavailable.push(`post_note: you've pinned ${ctx.notesToday} notes today, the board is full until tomorrow`);
+    const cafeNeighbor = this.neighbors.find((n) => n.place === 'cafe');
+    if (cafeNeighbor && !canChat) {
+      unavailable.push(
+        cafeNeighbor.hours && !neighborPresent(cafeNeighbor, ctx.snapshot.simTime)
+          ? `chat: ${cafeNeighbor.name} is only at the café ${formatHours(cafeNeighbor.hours)}`
+          : `chat: you've chatted enough with ${cafeNeighbor.name} for today`,
+      );
+    }
+    if (this.cfg.webSearch && !canBrowse) unavailable.push('browse: no more web searches today');
+    if (!canPaint) unavailable.push("paint: you've painted enough for today");
     try {
       const { args, meta } = await this.llm({
         model: this.cfg.brainModel,
         system: decideSystem(this.persona),
-        user: decideUser(ctx, kinds),
+        user: decideUser(ctx, kinds, unavailable),
         tool: decideTool(kinds, ctx.books.map((b) => b.id)),
         maxTokens: 300,
       });
@@ -568,20 +592,33 @@ export class Mind {
     let lastError: unknown;
     for (const provider of this.cfg.searchProviderOrder) {
       if ((this.searchDownUntil.get(provider) ?? 0) > Date.now()) continue;
+      const attempt = () =>
+        provider === 'openrouter'
+          ? this.search({
+              model: this.cfg.searchModel,
+              system: browseSystem(this.persona),
+              query,
+              maxTokens: 400,
+              maxResults: 3,
+              excludeDomains: this.cfg.webExcludeDomains,
+            })
+          : this.searchAndRead(provider, query);
       try {
-        if (provider !== 'openrouter') return await this.searchAndRead(provider, query);
-        return await this.search({
-          model: this.cfg.searchModel,
-          system: browseSystem(this.persona),
-          query,
-          maxTokens: 400,
-          maxResults: 3,
-          excludeDomains: this.cfg.webExcludeDomains,
-        });
-      } catch (err) {
-        lastError = err;
-        this.searchDownUntil.set(provider, Date.now() + 3_600_000);
-        console.warn(`[brain] ${provider} search failed, trying the next one: ${(err as Error).message}`);
+        return await attempt();
+      } catch (first) {
+        // One retry: search engines time out now and then.
+        if (!isAccountError(first)) {
+          await sleep(2000);
+          try {
+            return await attempt();
+          } catch (second) {
+            lastError = second;
+          }
+        } else {
+          lastError = first;
+        }
+        this.searchDownUntil.set(provider, Date.now() + searchSkipMs(lastError));
+        console.warn(`[brain] ${provider} search failed, trying the next one: ${(lastError as Error).message}`);
       }
     }
     throw lastError ?? new Error('no search provider available');

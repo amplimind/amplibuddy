@@ -268,6 +268,14 @@ export class Store {
     return Number(row.n);
   }
 
+  /** Events of one type since a sim time (e.g. the start of the current sim day). */
+  countEventsSinceSim(type: string, simTime: number): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM events WHERE type = ? AND sim_time >= ?')
+      .get(type, simTime) as Row;
+    return Number(row.n);
+  }
+
   /** How often an activity was started since 00:00 UTC today. */
   countActivityToday(kind: string): number {
     const since = `${new Date().toISOString().slice(0, 10)}T00:00:00`;
