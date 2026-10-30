@@ -1,0 +1,42 @@
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_10d94b75ab213c 77
+  s_2cca0dc321ad0c::t_03902c209ee4ba 721-723
+  s_2cca0dc321ad0c::t_6e50a1845b526a 713-714
+  s_2cca0dc321ad0c::t_6bd656f0a30c7c 27,35,710-712,715-720,724-730
+  s_2cca0dc321ad0c::t_987a9bbdb6ecc6 731
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_10d94b75ab213c 254-255
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_10d94b75ab213c 408
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_6de29a40d9d961 31,168-178,182-185,189-190,193-196,198-207,209-210,227-228,234,461,561,809,867,968
+  s_2cca0dc321ad0c::t_6e50a1845b526a 181
+  s_2cca0dc321ad0c::t_10d94b75ab213c 179-180,186-188,191-192,197,208,229-233
+apps/brain/src/search.ts
+  s_2cca0dc321ad0c::t_6de29a40d9d961 175-176,188-189
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_b2d048bd64dffa 69,77,119-133,377-384
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_10d94b75ab213c 291-308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "688670368ab1d284fd27b9945db3b3c52b3c6d93",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
