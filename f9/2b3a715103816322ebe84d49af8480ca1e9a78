@@ -1,0 +1,85 @@
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_9ddd150d594593 40,246-248
+  s_2cca0dc321ad0c::t_3cdafe7929bc91 249
+apps/sim/src/mindview.ts
+  s_2cca0dc321ad0c::t_f16b46c07833c2 1-170,173-177
+  s_2cca0dc321ad0c::t_9ddd150d594593 171-172
+apps/brain/src/search.ts
+  s_2cca0dc321ad0c::t_747b7a72be8d7d 1-3
+packages/shared/src/text.ts
+  s_2cca0dc321ad0c::t_747b7a72be8d7d 1-29,32-34
+  s_2cca0dc321ad0c::t_8ae236d77accd5 30-31
+apps/web/src/Mind.tsx
+  s_2cca0dc321ad0c::t_29304db46fd33b 229,231
+  s_2cca0dc321ad0c::t_0b72c57d85eae3 2-12,15,19-22,39-40,42-45,47-48,50-69,72-78,80-82,84-92,95-97,99-102,104-106,111-114,116-121,123-124,134,180,187-189,191-192,198,208-213,215-226,254-261,264-270,272-276,278-281,283-306,311-312,373-374,379-380,382-386,388-389,391-400,438-441,443-449,454-458,460-466,470,478-479,490,496-498
+  s_2cca0dc321ad0c::t_6e5799a2ade1be 1,13-14,16-18,23-38,41,46,49,70-71,79,83,93-94,98,103,107-110,115,122,125-133,135-179,181-186,190,193-197,199-207,214,227-228,230,232-253,262-263,271,277,282,307-310,313-372,375-378,381,387,390,401-419,421-437,442,450-453,459,467-469,471-477,480-489,491-495
+  s_2cca0dc321ad0c::t_e2cf23c0ee0b27 420
+README.md
+  s_2cca0dc321ad0c::t_1b629ad281c2ab 25
+apps/sim/src/check.ts
+  s_2cca0dc321ad0c::t_f42d57a17e2d12 8
+apps/sim/src/projects.ts
+  s_2cca0dc321ad0c::t_37066b82585e30 193-211
+  s_2cca0dc321ad0c::t_e76939f3794402 18
+apps/sim/src/main.ts
+  s_2cca0dc321ad0c::t_70d471d937edcf 44-52
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_0113576e8a674c 299-304
+apps/sim/test/code.test.ts
+  s_2cca0dc321ad0c::t_2364b95697ce8c 12
+  s_2cca0dc321ad0c::t_d794384d7cc437 127-162
+  s_2cca0dc321ad0c::t_9573e7f85d1033 110-111
+apps/sim/src/sites.ts
+  s_2cca0dc321ad0c::t_d128e1e498ec7a 144-151
+  s_2cca0dc321ad0c::t_addf2724b074a3 117-126
+  s_2cca0dc321ad0c::t_0412270838b93c 45-91,93-96
+  s_2cca0dc321ad0c::t_d21d7d61539a7e 1
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_6ca062d9df0777 186-187
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_747b7a72be8d7d 38,216
+  s_2cca0dc321ad0c::t_b314b41c6be7ff 4-5
+  s_2cca0dc321ad0c::t_05f5ac2f194709 1079
+  s_2cca0dc321ad0c::t_4f44e18928be28 155-156
+packages/shared/src/index.ts
+  s_2cca0dc321ad0c::t_97940a433b3d48 12
+  s_2cca0dc321ad0c::t_747b7a72be8d7d 11
+apps/sim/test/mind.test.ts
+  s_2cca0dc321ad0c::t_ddfddfdce5592a 1-47
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_979c07e3e59bf9 7,58,61-68,94-95
+  s_2cca0dc321ad0c::t_3ae9d80fcd1854 96
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_4b271b4c560d3a 333-348
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_fd65988b4917fa 1931
+  s_2cca0dc321ad0c::t_979c07e3e59bf9 1828-1930,1933-1998,2000-2080,2082-2091,2121-2122,2151,2154-2173,2175-2178,2180,2222-2223,2230-2237,2243-2245,2253-2269,2274-2275,2279-2280,2283-2284,2305
+  s_2cca0dc321ad0c::t_5a93b0d41547ec 1999,2081,2092-2120,2123-2150,2152-2153,2174,2179,2181-2221,2224-2229,2238-2242,2246-2252,2270-2273,2276-2278,2281-2282,2285-2304
+  s_2cca0dc321ad0c::t_f4e9ec8c682483 1932
+  s_2cca0dc321ad0c::t_44b55e13e92876 2306-2322
+world/library/small-websites.md
+  s_2cca0dc321ad0c::t_5c8678a7eaa3cb 359-360,362
+packages/shared/src/mindview.ts
+  s_2cca0dc321ad0c::t_97940a433b3d48 1-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f92b3a715103816322ebe84d49af8480ca1e9a78",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "unknown"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
