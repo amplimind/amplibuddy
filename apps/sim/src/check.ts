@@ -5,7 +5,7 @@ import { cleanProjectPath, type ProjectFile } from '@ampli-world/shared';
 // never knowing. Scripts are only compiled, never run: `new Script()` parses the code and
 // stops there.
 
-const MAX_PROBLEMS = 8;
+export const MAX_PROBLEMS = 8;
 
 /** The line of a syntax error, from V8's stack ("file.js:12"). */
 function errorLine(err: Error, filename: string): number | null {

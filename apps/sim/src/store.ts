@@ -330,6 +330,22 @@ export class Store {
     });
   }
 
+  /** All events of these types, oldest first (for the Mind page). */
+  eventsOfTypes(types: string[]): WorldEvent[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM events WHERE type IN (${types.map(() => '?').join(', ')}) ORDER BY id`)
+      .all(...types) as Row[];
+    return rows.map(toEvent);
+  }
+
+  /** Every night's notebook, oldest first. */
+  notebookHistory(): { simTime: number; notes: string[] }[] {
+    return (this.db.prepare('SELECT sim_time, notes FROM notebook ORDER BY id').all() as Row[]).map((r) => ({
+      simTime: Number(r.sim_time),
+      notes: JSON.parse(String(r.notes)) as string[],
+    }));
+  }
+
   /** The latest web searches, oldest first. */
   recentSearches(limit = 8): { query: string; takeaway?: string; simTime: number }[] {
     const rows = this.db

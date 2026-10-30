@@ -22,6 +22,7 @@ It's a door-opener: people get used to AI by watching an agent behave instead of
 - **Art**: paintings it made in the studio, as SVG code it wrote itself.
 - **Code**: websites it built at the Code Lab, with their commits and links to open them.
 - **Memory**: its notebook (the only long-term memory, rewritten every night) and its diary.
+- **🧠 Mind** (top right): how your character develops. The topics on its mind and how they rise and fade, its notebook night by night (what it added, reworded and forgot), what it learned from books, the web and letters, what its neighbours remember about it, and how it spent each day.
 - **How it works**: the whole mechanism explained, with today's costs.
 
 ## Set it up on your Mac

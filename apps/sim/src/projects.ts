@@ -15,7 +15,7 @@ import {
   type ProjectCommit,
   type ProjectFile,
 } from '@ampli-world/shared';
-import { checkProject } from './check.ts';
+import { MAX_PROBLEMS, checkProject } from './check.ts';
 
 // The Code Lab's projects: one folder of text files per website in data/projects/<slug>/,
 // plus <slug>.json with its name, description and commits. The folder is the truth; a local
@@ -188,6 +188,25 @@ export class Projects {
       repoUrl: this.git ? this.git.repoUrl(slug) : null,
       problems: meta.problems ?? [],
     };
+  }
+
+  /** Changes with every commit, so error reports from an older version of a page don't count. */
+  version(slug: string): string | null {
+    const latest = this.meta(slug)?.commits[0];
+    return latest ? (latest.sha ?? String(latest.simTime)) : null;
+  }
+
+  /**
+   * A page stopped with an error in someone's browser. It joins the check's problems until the
+   * next commit. Returns false when it was already known (or the list is full).
+   */
+  reportError(slug: string, problem: string): boolean {
+    const meta = this.meta(slug);
+    const problems = meta?.problems ?? [];
+    if (!meta || problems.includes(problem) || problems.length >= MAX_PROBLEMS) return false;
+    meta.problems = [...problems, problem];
+    writeFileSync(this.metaFile(slug), `${JSON.stringify(meta, null, 2)}\n`);
+    return true;
   }
 
   list(): CodeProject[] {

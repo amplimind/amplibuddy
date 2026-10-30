@@ -9,7 +9,7 @@ import type { CodeProject, WorldEvent } from '@ampli-world/shared';
 import { createApp } from '../src/http.ts';
 import { checkProject } from '../src/check.ts';
 import { CommitError, GitServer, Projects } from '../src/projects.ts';
-import { SITE_CSP, createSitesApp } from '../src/sites.ts';
+import { SITE_CSP, createSitesApp, reportedProblem } from '../src/sites.ts';
 import { Sim } from '../src/sim.ts';
 import { Store } from '../src/store.ts';
 
@@ -107,7 +107,8 @@ test('code: sites are served in a sandbox, and only files that belong to them', 
   const sites = createSitesApp(p, () => 'Ampli');
   const page = await sites.request('/pond-clock/');
   assert.equal(page.status, 200);
-  assert.equal(await page.text(), html);
+  const served = await page.text();
+  assert.equal(served.replace(/<script>\(\(\)=>.*?<\/script>/, '').replace('<script crossorigin src', '<script src'), html);
   assert.equal(page.headers.get('content-security-policy'), SITE_CSP);
   assert.match(SITE_CSP, /sandbox allow-scripts;/);
   assert.match(SITE_CSP, /connect-src 'none'/);
@@ -121,6 +122,42 @@ test('code: sites are served in a sandbox, and only files that belong to them', 
     assert.equal((await sites.request(path)).status, 404, path);
   }
   assert.match(await (await sites.request('/')).text(), /<a href="\/pond-clock\/">Pond Clock<\/a>/);
+});
+
+test('code: when a page breaks in a browser, the character hears the file, line and error', async () => {
+  const p = projects();
+  const page = '<!DOCTYPE html>\n<html>\n<head><title>Pond</title></head>\n<body>\n<script>\nanimate();\n</script>\n<script src="app.js"></script>';
+  await p.commit({ project: 'Pond Oxygen', files: [{ path: 'index.html', content: page }, { path: 'app.js', content: 'x()' }], message: 'Start' }, 1);
+  const heard: string[] = [];
+  const sites = createSitesApp(p, () => 'Ampli', ({ name }, problem) => heard.push(`${name}: ${problem}`));
+  const served = await (await sites.request('/pond-oxygen/')).text();
+  assert.equal(served.split('\n').length, page.split('\n').length, 'line numbers stay the same');
+  assert.match(served, /<script crossorigin src="app\.js">/, 'its own script files can report their errors too');
+  assert.equal((await sites.request('/pond-oxygen/app.js')).headers.get('access-control-allow-origin'), '*');
+  const url = /new Image\(\)\.src="([^"]+)"/.exec(served)![1]!;
+
+  const report = (query: Record<string, string>, to = url) => sites.request(`${to}?${new URLSearchParams(query)}`);
+  const error = { m: 'Uncaught ReferenceError: minO2 is not defined', f: 'http://127.0.0.1:4380/pond-oxygen/', l: '6' };
+  assert.equal((await report(error)).status, 204);
+  await report(error); // the same again: not news
+  await report({ m: 'Script error.', f: '', l: '0' });
+  await report(error, url.replace(/[0-9a-f]{32}$/, '0'.repeat(32))); // a forged key is ignored
+  await report({ m: 'Uncaught TypeError: x is not a function', f: 'http://127.0.0.1:4380/pond-oxygen/app.js', l: '1' }, '/__errors/nope/0');
+  assert.deepEqual(heard, [
+    'Pond Oxygen: index.html, line 6: ReferenceError: minO2 is not defined (it stopped there when someone opened the page)',
+    'Pond Oxygen: a script stopped with an error (no details) (it stopped there when someone opened the page)',
+  ]);
+  assert.deepEqual(p.project('pond-oxygen')!.problems, heard.map((h) => h.slice('Pond Oxygen: '.length)));
+
+  // A new commit is a new version: the old problems go, and reports from the old page no longer count.
+  await p.commit({ project: 'pond-oxygen', files: [{ path: 'app.js', content: 'y()' }], message: 'Fix' }, 2);
+  assert.deepEqual(p.project('pond-oxygen')!.problems, []);
+  await report(error);
+  assert.equal(heard.length, 2);
+  assert.equal(
+    reportedProblem('pond-oxygen', { m: 'Uncaught\u0000 boom', f: 'http://127.0.0.1:4380/elsewhere/x.js', l: '3' }),
+    'boom (it stopped there when someone opened the page)',
+  );
 });
 
 test('code: the brain commits through the sim; refusals are logged so the character knows', async () => {

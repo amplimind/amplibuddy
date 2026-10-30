@@ -1825,3 +1825,498 @@ code.sha {
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* --- The Mind page --- */
+
+/* Awake time categories. Validated as a set on the card surface (#fffaf2): CVD ΔE ≥ 9.1,
+   normal ≥ 19.6; three are under 3:1, so every bar has a text line with the same numbers. */
+:root {
+  --cat-learning: #2a78d6;
+  --cat-creating: #eb6834;
+  --cat-people: #1baf7a;
+  --cat-outdoors: #eda100;
+  --cat-food: #e87ba4;
+}
+
+.cat-learning { background: var(--cat-learning); }
+.cat-creating { background: var(--cat-creating); }
+.cat-people { background: var(--cat-people); }
+.cat-outdoors { background: var(--cat-outdoors); }
+.cat-food { background: var(--cat-food); }
+
+/* The town fills the window; the Mind page scrolls like a document. */
+@media (min-width: 1081px) {
+  .app.app-scroll {
+    height: auto;
+    display: block;
+  }
+}
+
+.mind {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mind-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mind-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mind-who h2 {
+  font-size: 26px;
+}
+
+.mind-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.mind-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.mind-stat-n {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mind-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.mind-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mind-section .section-title {
+  margin: 0;
+}
+
+/* Interests */
+
+.interests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.interests li {
+  display: grid;
+  /* Fixed tracks, so the lines stay aligned whether or not a row has a "rising" chip. */
+  grid-template-columns: 120px 140px 44px auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.interest-word {
+  font-weight: 600;
+}
+
+.interest-total {
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.spark-base {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--cat-learning);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.spark-dot {
+  fill: var(--cat-learning);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.spark-hit {
+  fill: transparent;
+}
+
+.spark-hit:hover {
+  fill: rgba(42, 120, 214, 0.08);
+}
+
+.chip-rising {
+  background: #e3f1e8;
+  color: #2e6b45;
+}
+
+.chip-active {
+  background: var(--accent-soft);
+  color: #8a4a1c;
+}
+
+/* Memory */
+
+.memory-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memory-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.mind-night {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.memory-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.memory-notes li {
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #fffdf9;
+  border: 1px solid var(--line);
+}
+
+.memory-new {
+  border-color: #b9dcc6 !important;
+  background: #f1f8f4 !important;
+}
+
+.memory-changed {
+  border-color: #f0d9a8 !important;
+  background: #fdf8ec !important;
+}
+
+.memory-forgotten {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(138, 122, 104, 0.5);
+  background: transparent !important;
+  border-style: dashed !important;
+}
+
+.memory-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.memory-badge-new { background: #cfe8d8; color: #2e6b45; }
+.memory-badge-changed { background: #f5e3b8; color: #7a5a14; }
+.memory-badge-forgotten { background: #ebe4da; color: #6b5d4f; }
+
+/* Knowledge */
+
+.knowledge {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 10px;
+}
+
+.knowledge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fffdf9;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* In the overview: one column, three lines each; the Knowledge tab has the full text. */
+.knowledge-compact {
+  grid-template-columns: 1fr;
+}
+
+.knowledge-compact .knowledge-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.knowledge-compact .sources {
+  display: none;
+}
+
+.knowledge-book { border-left: 4px solid var(--cat-learning); }
+.knowledge-web { border-left: 4px solid #7a5cc7; }
+.knowledge-letter { border-left: 4px solid var(--cat-people); }
+
+/* Neighbours */
+
+.mind-neighbor {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.mind-neighbor ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Tabs, section heads and the small switches inside sections */
+
+.mind-tabs {
+  max-width: 520px;
+}
+
+.mind-tabs .tab {
+  font-size: 14px;
+  padding: 8px 10px;
+}
+
+.mind-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mind-section-head button.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mind-section-head button.link:hover {
+  text-decoration: underline;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segmented button {
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented button.active {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: #8a4a1c;
+}
+
+.segmented-n {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Days: one compact row each, opened for the details */
+
+.mind-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mind-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.day-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.day-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.day-row:last-child {
+  border-bottom: 0;
+}
+
+.day-row summary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(0, 150px);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 8px;
+}
+
+.day-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.day-row summary:hover {
+  background: #fbf3e6;
+}
+
+.day-label {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.day-label::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.day-row[open] .day-label::before {
+  transform: rotate(90deg);
+}
+
+.day-icons {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.day-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+}
+
+.day-bar-empty {
+  background: #f1e9dc;
+  border-radius: 4px;
+}
+
+.day-seg {
+  min-width: 4px;
+  border-radius: 4px;
+}
+
+.day-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 4px 14px 80px;
+}
+
+.day-split {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.day-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.day-diary {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--line);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: #fffdf9;
+  border-radius: 0 8px 8px 0;
+}
+
+.day-diary p + p {
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .day-row summary {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .day-icons {
+    display: none;
+  }
+
+  .day-detail {
+    padding-left: 4px;
+  }
+
+  .interests li {
+    grid-template-columns: 100px 140px auto;
+  }
+
+  .interests li > :last-child {
+    display: none;
+  }
+}

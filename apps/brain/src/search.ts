@@ -1,4 +1,6 @@
-import type { WebSource } from '@ampli-world/shared';
+import { contentWords, type WebSource } from '@ampli-world/shared';
+
+export { contentWords };
 
 // Web search for the internet café when the LLM isn't on OpenRouter (whose web plugin
 // searches and reads in one call). Here we fetch results ourselves and hand them to
@@ -167,21 +169,6 @@ export function resultsBlock(hits: SearchHit[]): string {
 }
 
 // --- Not the same search twice -----------------------------------------------------------
-
-const STOPWORDS = new Set(
-  'a an and are at be before by can do does for from how in into is it its of on or that the their them this to under what when where which who why with'.split(' '),
-);
-
-/** The words that carry meaning: lowercase, no stopwords, plurals folded. */
-export function contentWords(query: string): Set<string> {
-  return new Set(
-    query
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
-      .map((w) => (w.length > 4 && w.endsWith('s') ? w.slice(0, -1) : w)),
-  );
-}
 
 /** Same question in other words? Enough shared words, or one query almost inside the other. */
 export function similarQuery(a: string, b: string): boolean {

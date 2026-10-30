@@ -1,6 +1,8 @@
 import {
   ACTIVITIES,
   ART_VIEWBOX,
+  EVERYDAY_WORDS,
+  contentWords,
   MAX_COMMIT_MESSAGE_CHARS,
   MAX_FILE_CHARS,
   MAX_PROJECT_CHARS,
@@ -33,7 +35,7 @@ import {
   type WorldEvent,
 } from '@ampli-world/shared';
 import type { ToolSpec } from './llm.ts';
-import { contentWords, similarQuery } from './search.ts';
+import { similarQuery } from './search.ts';
 
 // Prompt text lives here so it can be read and tuned in one place.
 
@@ -150,6 +152,8 @@ export function describeEvent(e: WorldEvent): string | null {
       return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}${
         e.data.warnings?.length ? ` The Code Lab's check found problems to fix next time: ${e.data.warnings.join('; ')}.` : ''
       }`;
+    case 'site_error':
+      return `${at} Someone opened your website "${e.data.name}", and it broke in their browser: ${e.data.problem}. It's on the Code Lab's list of problems to fix.`;
     case 'renamed':
       return e.data.what === 'town'
         ? `${at} The town has a new name: ${e.data.to} (it used to be ${e.data.from}).`
@@ -200,21 +204,6 @@ const OPTION_ORDER: ActivityKind[] = [
  */
 // --- Ruts: one topic taking over -----------------------------------------------------------
 
-/** Words that say nothing about a topic: the everyday of the town and of thinking out loud. */
-const EVERYDAY = new Set(
-  (
-    'just want like feel feels felt something still time today morning evening afternoon night right next maybe really ' +
-    'thing things been have that this with from about what into there here some more much first last again back know need ' +
-    'think thinking going would could should them they their then than when where which while after over little good day ' +
-    'days now new also make made done let get got even only well very own other same every because one two said says ' +
-    'question questions answer answered answers read reading book books look looking walk wander stroll coffee food eat ' +
-    'hungry sleep tired bench town home cafe café kiosk park library plaza internet studio workshop notice board note ' +
-    'notes painting paint people watch watching company quiet settle settled moment finished finish started start found ' +
-    'learned tried sitting staying came coming sure mind head stomach belly enough feeling while long little warm small ' +
-    'place around always never ever since already thought thoughts'
-  ).split(' '),
-);
-
 /**
  * A topic the character can't let go of: content words in many of the things it said
  * lately (thoughts, notes, searches, paintings, chat lines; at least 5, and 40 %). Names of
@@ -224,7 +213,7 @@ export function rutWords(ctx: BrainContext): { words: string[]; inThoughts: numb
   const thoughts = ctx.recentOwnTexts.slice(-20);
   if (thoughts.length < 10) return null;
   const names = new Set([ctx.snapshot.persona.name, ...ctx.snapshot.neighbors.map((n) => n.name)].map((n) => n.toLowerCase()));
-  const sets = thoughts.map((t) => [...contentWords(t)].filter((w) => w.length > 3 && !EVERYDAY.has(w) && !names.has(w)));
+  const sets = thoughts.map((t) => [...contentWords(t)].filter((w) => w.length > 3 && !EVERYDAY_WORDS.has(w) && !names.has(w)));
   const counts = new Map<string, number>();
   for (const set of sets) for (const w of set) counts.set(w, (counts.get(w) ?? 0) + 1);
   const min = Math.max(5, Math.ceil(thoughts.length * 0.4));
@@ -1087,6 +1076,7 @@ const CODE_RULES = `How the Code Lab works:
 - Everything lives in the project: nothing loads from the internet (no CDNs, web fonts, external images or APIs). The page runs in a sandbox: it can't make network requests, send forms or use localStorage. Drawing on a canvas, SVG, animations, buttons and games all work.
 - Small and finished beats big and broken: one idea per session that works when you're done.
 - A small page is best as ONE file: index.html with its CSS in <style> and its JavaScript in <script>. If you do split it into files, write every file it links to in the same commit; a page that links to a file you haven't written is broken.
+- Read your script top to bottom the way the browser runs it: everything is set up before it's first used (start the animation loop after the state it draws), and anything two functions share is declared at the top, not inside one of them. When a page breaks in someone's browser, the Code Lab hears the error and tells you.
 - Allowed files: .html .css .js .json .svg .txt .md, at most ${MAX_PROJECT_FILES} per project, each under ${MAX_FILE_CHARS} characters, the whole project under ${MAX_PROJECT_CHARS}.`;
 
 export function codePlanSystem(persona: string): string {

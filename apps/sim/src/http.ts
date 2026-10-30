@@ -37,6 +37,7 @@ import {
 } from '@ampli-world/shared';
 import { withoutText, type ShelfBook } from './library.ts';
 import { DATA_DIR } from '@ampli-world/shared/node';
+import { buildMindView } from './mindview.ts';
 import { CommitError } from './projects.ts';
 import { registerSetup } from './setup.ts';
 import type { Sim, SseMessage } from './sim.ts';
@@ -241,6 +242,10 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     const counts = store.readCounts();
     return c.json([...books.values()].map((b) => ({ ...withoutText(b), timesRead: counts.get(b.id) ?? 0 })));
   });
+
+  // --- The Mind page (public: only what the feed shows anyway) ---
+
+  app.get('/api/mind', (c) => c.json(buildMindView(sim)));
 
   // --- Code Lab (public) ---
 

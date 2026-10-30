@@ -41,7 +41,15 @@ if (config.code) {
   sim.projects = new Projects(config.projectsDir, `http://localhost:${config.sitesPort}`, git);
   // Its own port and origin: the sites never share cookies or storage with the town's page.
   sitesServer = serve(
-    { fetch: createSitesApp(sim.projects, () => persona.name).fetch, port: config.sitesPort, hostname: '127.0.0.1' },
+    {
+      fetch: createSitesApp(
+        sim.projects,
+        () => persona.name,
+        ({ slug, name }, problem) => sim.log({ type: 'site_error', data: { project: slug, name, problem } }),
+      ).fetch,
+      port: config.sitesPort,
+      hostname: '127.0.0.1',
+    },
     ({ port }) => console.log(`[sim] Code Lab sites at http://localhost:${port}${git ? ` · Git at ${git.url}` : ' · no Git server'}`),
   );
 }

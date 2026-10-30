@@ -296,6 +296,12 @@ function FeedItem({ event }: { event: WorldEvent }) {
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
         </li>
       );
+    case 'site_error':
+      return (
+        <li className="feed-item feed-minor">
+          {time} ⚠️ “{event.data.name}” broke when someone opened it: {event.data.problem.replace(/ \(it stopped there.*\)$/, '')}
+        </li>
+      );
     case 'renamed':
       return (
         <li className="feed-item feed-minor">

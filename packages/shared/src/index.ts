@@ -8,3 +8,5 @@ export * from './species.ts';
 export * from './setup.ts';
 export * from './library.ts';
 export * from './code.ts';
+export * from './text.ts';
+export * from './mindview.ts';

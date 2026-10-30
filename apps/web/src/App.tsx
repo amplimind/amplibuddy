@@ -4,6 +4,7 @@ import { AskCard } from './AskCard.tsx';
 import { CodeTab } from './Code.tsx';
 import { Gallery } from './Gallery.tsx';
 import { Mailbox } from './Mailbox.tsx';
+import { MindPage } from './Mind.tsx';
 import { CritterPreview, SettingsPanel, SetupWizard } from './Setup.tsx';
 import { Feed, HowItWorks, MemoryView, StatusCard } from './Panel.tsx';
 import { TownCanvas } from './TownCanvas.tsx';
@@ -54,7 +55,16 @@ function Town({ canConfigure }: { canConfigure: boolean }) {
   const { snapshot, events, diary, notebook, usage, connected, live, bubble, mailVersion, artVersion, codeVersion } = useWorld();
   const [tab, setTab] = useState<Tab>('Thoughts');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mindOpen, setMindOpen] = useState(false);
   const name = snapshot?.persona.name ?? 'Ampli';
+
+  if (mindOpen && snapshot) {
+    return (
+      <div className="app app-scroll">
+        <MindPage persona={snapshot.persona} onClose={() => setMindOpen(false)} />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -80,6 +90,9 @@ function Town({ canConfigure }: { canConfigure: boolean }) {
             onClick={() => setTab(tab === 'How it works' ? 'Thoughts' : 'How it works')}
           >
             How it works
+          </button>
+          <button type="button" className="pill-button" onClick={() => setMindOpen(true)} disabled={!snapshot}>
+            🧠 Mind
           </button>
           {canConfigure && (
             <button type="button" className="pill-button" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">

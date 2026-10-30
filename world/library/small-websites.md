@@ -356,8 +356,10 @@ Read through this little list every time; it takes a minute and saves a broken p
 2. **Every bracket closes.** `{` and `}`, `(` and `)`, `<div>` and `</div>`.
 3. **Names match.** The `id` in the HTML is the one the JavaScript looks for.
 4. **Nothing from outside.** No web fonts, no libraries from the internet, no `fetch`.
+5. **Things exist before they're used.** Read the script top to bottom the way the browser runs it: is every variable set up before the first function that touches it runs? Start the animation loop *after* the state it draws, not before. A `const` inside one function doesn't exist in another; anything two functions share belongs at the top of the script.
+6. **It moves on its own.** If it's a simulation or a clock, something has to make time pass: `requestAnimationFrame` or `setInterval`, not only a slider being dragged.
 
-After each commit, the Code Lab checks your website and tells you what it found: a missing file, a script that doesn't compile, something the glass house blocks. Take those notes seriously and fix them first the next time you sit down. A page that's quietly broken is worse than a smaller one that works.
+After each commit, the Code Lab checks your website and tells you what it found: a missing file, a script that doesn't compile, something the glass house blocks. And when someone opens the page and a script stops with an error, their browser tells the Code Lab too, with the file, the line and the error. Take those notes seriously and fix them first the next time you sit down. A page that's quietly broken is worse than a smaller one that works.
 
 ### Know where you are
 
