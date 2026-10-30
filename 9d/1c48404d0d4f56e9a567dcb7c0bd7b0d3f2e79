@@ -1,0 +1,39 @@
+README.md
+  s_2cca0dc321ad0c::t_d76f1f3edf3f8f 77
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 299-305
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 153-156
+apps/sim/test/setup.test.ts
+  s_2cca0dc321ad0c::t_c146dff07b9a39 98-119
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 228
+apps/sim/src/setup.ts
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 29,250-266,322-325,350
+apps/sim/src/store.ts
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 245-260,262-263,265-268
+  s_2cca0dc321ad0c::t_0b957eb645854b 261,264
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_93a0f44d32bc01 184-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d1c48404d0d4f56e9a567dcb7c0bd7b0d3f2e79",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
