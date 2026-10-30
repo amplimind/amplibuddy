@@ -1,0 +1,42 @@
+apps/sim/src/projects.ts
+  s_2cca0dc321ad0c::t_1b3c530ec41c07 201-218
+  s_2cca0dc321ad0c::t_e6c58eb8b04353 200
+apps/brain/src/sim-client.ts
+  s_2cca0dc321ad0c::t_1b3c530ec41c07 72-75
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_4c5211574f8cc1 69,126-147,156-157,612,614-641,661,667
+apps/sim/test/code.test.ts
+  s_2cca0dc321ad0c::t_faaf07f6f8eb71 184-192
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_1b3c530ec41c07 509-516
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_4c5211574f8cc1 1089,1129-1136
+  s_2cca0dc321ad0c::t_e5296495753522 1137-1138
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_faaf07f6f8eb71 28,37,764-773
+  s_2cca0dc321ad0c::t_6c5ba1d203ceea 774
+world/library/small-websites.md
+  s_2cca0dc321ad0c::t_397d26f77b9678 24-26,34-35,351-360
+  s_2cca0dc321ad0c::t_fb053924510c4b 361
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1cac0172dbf2dae3b2bf1200cc28607caf0086b6",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
