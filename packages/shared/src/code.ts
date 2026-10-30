@@ -60,6 +60,8 @@ export interface CodeProject {
   siteUrl: string;
   /** The repository on the Git server, if there is one. */
   repoUrl: string | null;
+  /** What the Code Lab's check found after the last commit (syntax errors, missing files, blocked things). */
+  problems: string[];
 }
 
 export interface ProjectFile {
@@ -80,5 +82,9 @@ export interface CodeCommitRequest {
   message: string;
   /** The content check said no: nothing is saved or published. */
   held?: boolean;
+  /** The session went wrong before there was anything to save; logged so the character knows. */
+  failed?: string;
+  /** With `failed`: what the model sent, kept in data/code-failed/ so it can be recovered. */
+  raw?: string;
   llm?: LlmMeta[];
 }

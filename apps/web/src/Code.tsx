@@ -39,6 +39,13 @@ export function CodeTab({ name, codeVersion }: { name: string; codeVersion: numb
             </span>
           </header>
           {p.description && <p>{p.description}</p>}
+          {p.problems.length > 0 && (
+            <ul className="code-warnings">
+              {p.problems.map((w) => (
+                <li key={w}>⚠️ {w}</li>
+              ))}
+            </ul>
+          )}
           <div className="row">
             <a className="chip chip-link" href={p.siteUrl} target="_blank" rel="noopener noreferrer">
               Open the site ↗

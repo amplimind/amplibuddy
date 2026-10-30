@@ -195,6 +195,11 @@ export type EventBody =
         files?: string[];
         deleted?: string[];
         sha?: string;
+        /** Where the site runs, and the commit on the Git server (when there is one). */
+        url?: string;
+        commitUrl?: string;
+        /** What the Code Lab's check found: syntax errors, missing files, things the sandbox blocks. */
+        warnings?: string[];
         held?: boolean;
         /** Why it couldn't be saved (a path or size the Code Lab doesn't allow). */
         error?: string;
@@ -275,7 +280,7 @@ export interface BrainContext {
   /** What the character itself said lately (thoughts, notes, searches, paintings, chat lines), oldest first. */
   recentOwnTexts: string[];
   /** Its websites at the Code Lab (no file contents), and coding sessions since 00:00 UTC. */
-  projects: { slug: string; name: string; description: string; files: string[]; lastCommit: string | null }[];
+  projects: { slug: string; name: string; description: string; files: string[]; lastCommit: string | null; problems: string[] }[];
   codeToday: number;
   /** Artworks since 00:00 UTC, for the daily cap. */
   artToday: number;

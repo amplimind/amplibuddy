@@ -146,8 +146,10 @@ export function describeEvent(e: WorldEvent): string | null {
       return `${at} At the workshop you explained: "${e.data.text}"`;
     case 'code_committed':
       if (e.data.held) return `${at} You wrote code for "${e.data.name}", but it didn't pass the content check, so nothing was saved.`;
-      if (e.data.error) return `${at} You tried to save your code for "${e.data.name}", but the Code Lab refused it: ${e.data.error}.`;
-      return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}`;
+      if (e.data.error) return `${at} You worked on "${e.data.name}" at the Code Lab, but it didn't work out (${e.data.error}). Nothing was saved.`;
+      return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}${
+        e.data.warnings?.length ? ` The Code Lab's check found problems to fix next time: ${e.data.warnings.join('; ')}.` : ''
+      }`;
     case 'gyros_nudge':
       return `${at} You rang the workshop bell for the people who watch you: "${e.data.text}"`;
     case 'note_posted':
@@ -1100,7 +1102,11 @@ export function codePlanUser(ctx: BrainContext): string {
   const projects =
     ctx.projects.length > 0
       ? ctx.projects
-          .map((p) => `- ${p.slug}: "${p.name}". ${p.description} Files: ${p.files.join(', ') || '(none)'}. Last change: ${p.lastCommit ?? '(none)'}`)
+          .map(
+            (p) =>
+              `- ${p.slug}: "${p.name}". ${p.description} Files: ${p.files.join(', ') || '(none)'}. Last change: ${p.lastCommit ?? '(none)'}.` +
+              (p.problems.length > 0 ? ` Open problems: ${p.problems.join('; ')}.` : ''),
+          )
           .join('\n')
       : '(none yet)';
   return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. Mood: ${agent.mood.label}.
@@ -1159,15 +1165,19 @@ Answer by calling the \`commit\` tool once.`;
 }
 
 export function codeUser(
-  plan: { name: string; description: string; idea: string; isNew: boolean },
+  plan: { name: string; description: string; idea: string; isNew: boolean; problems?: string[] },
   files: { path: string; content: string }[],
 ): string {
+  const problems =
+    plan.problems && plan.problems.length > 0
+      ? `\n\nWhat the Code Lab's check found after your last commit (fix these first):\n${plan.problems.map((p) => `- ${p}`).join('\n')}`
+      : '';
   const current =
     files.length > 0
       ? files.map((f) => `<file path="${f.path}">\n${f.content}\n</file>`).join('\n\n')
       : '(no files yet)';
   return `${plan.isNew ? 'A new website' : 'Your website'}: "${plan.name}"${plan.description ? `. ${plan.description}` : ''}
-What you're doing this session: ${plan.idea}
+What you're doing this session: ${plan.idea}${problems}
 
 The files as they are now:
 ${current}`;

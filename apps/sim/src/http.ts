@@ -1,7 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
@@ -36,6 +36,7 @@ import {
   type WebSource,
 } from '@ampli-world/shared';
 import { withoutText, type ShelfBook } from './library.ts';
+import { DATA_DIR } from '@ampli-world/shared/node';
 import { CommitError } from './projects.ts';
 import { registerSetup } from './setup.ts';
 import type { Sim, SseMessage } from './sim.ts';
@@ -418,6 +419,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
         description: p.description,
         files: p.files.map((f) => f.path),
         lastCommit: p.commits[0]?.message ?? null,
+        problems: p.problems,
       })),
       codeToday: store.countActivityToday('code'),
       artToday: store.countArtToday(),
@@ -508,6 +510,18 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       sim.log({ type: 'code_committed', data: { project: body.project.slice(0, 60), name: body.project.slice(0, 60), held: true, ...llm } });
       return c.json({ ok: true, saved: false });
     }
+    if (typeof body.failed === 'string') {
+      const error = body.failed.replace(/\s+/g, ' ').slice(0, 200) || 'something went wrong';
+      if (typeof body.raw === 'string' && body.raw) {
+        // What the model sent, kept so the work isn't lost (data/ never goes into git).
+        const file = join(DATA_DIR, 'code-failed', `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, body.raw.slice(0, 500_000));
+        console.warn(`[sim] kept the output of a failed coding session in ${file}`);
+      }
+      sim.log({ type: 'code_committed', data: { project: body.project.slice(0, 60), name: body.project.slice(0, 60), error, ...llm } });
+      return c.json({ ok: true, saved: false });
+    }
     try {
       const done = await sim.projects.commit(body, engine.simTime);
       sim.log({
@@ -519,6 +533,9 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
           files: done.written,
           ...(done.deleted.length > 0 ? { deleted: done.deleted } : {}),
           ...(done.sha ? { sha: done.sha } : {}),
+          url: done.project.siteUrl,
+          ...(done.problems.length > 0 ? { warnings: done.problems } : {}),
+          ...(done.sha && done.project.repoUrl ? { commitUrl: `${done.project.repoUrl}/commit/${done.sha}` } : {}),
           ...llm,
         },
       });

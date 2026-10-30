@@ -15,6 +15,7 @@ import {
   type ProjectCommit,
   type ProjectFile,
 } from '@ampli-world/shared';
+import { checkProject } from './check.ts';
 
 // The Code Lab's projects: one folder of text files per website in data/projects/<slug>/,
 // plus <slug>.json with its name, description and commits. The folder is the truth; a local
@@ -24,6 +25,7 @@ interface ProjectMeta {
   name: string;
   description: string;
   commits: ProjectCommit[];
+  problems?: string[];
 }
 
 const MAX_KEPT_COMMITS = 30;
@@ -184,6 +186,7 @@ export class Projects {
       commits: meta.commits,
       siteUrl: `${this.sitesUrl}/${slug}/`,
       repoUrl: this.git ? this.git.repoUrl(slug) : null,
+      problems: meta.problems ?? [],
     };
   }
 
@@ -258,8 +261,9 @@ export class Projects {
       }
     }
     meta.commits = [{ message, simTime, ...(sha ? { sha } : {}) }, ...meta.commits].slice(0, MAX_KEPT_COMMITS);
+    meta.problems = checkProject([...after].map(([path, content]) => ({ path, content })));
     mkdirSync(this.dir, { recursive: true });
     writeFileSync(this.metaFile(slug!), `${JSON.stringify(meta, null, 2)}\n`);
-    return { project: this.project(slug!)!, message, written: written.map((w) => w.path), deleted, sha };
+    return { project: this.project(slug!)!, message, written: written.map((w) => w.path), deleted, sha, problems: meta.problems };
   }
 }

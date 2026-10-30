@@ -257,7 +257,7 @@ function FeedItem({ event }: { event: WorldEvent }) {
         return (
           <li className="feed-item feed-minor">
             {time} wrote code for “{event.data.name}”, but{' '}
-            {event.data.held ? "it didn't pass the content check" : `the Code Lab refused it (${event.data.error})`}
+            {event.data.held ? "it didn't pass the content check" : `it didn't work out (${event.data.error})`}
           </li>
         );
       }
@@ -272,6 +272,27 @@ function FeedItem({ event }: { event: WorldEvent }) {
             {(event.data.files ?? []).join(', ')}
             {event.data.sha && <code className="sha">{event.data.sha.slice(0, 7)}</code>}
           </p>
+          {event.data.warnings && event.data.warnings.length > 0 && (
+            <ul className="code-warnings">
+              {event.data.warnings.map((w) => (
+                <li key={w}>⚠️ {w}</li>
+              ))}
+            </ul>
+          )}
+          {(event.data.url || event.data.commitUrl) && (
+            <div className="row code-links">
+              {event.data.url && (
+                <a className="chip chip-link" href={event.data.url} target="_blank" rel="noopener noreferrer">
+                  Open the site ↗
+                </a>
+              )}
+              {event.data.commitUrl && (
+                <a className="chip chip-link" href={event.data.commitUrl} target="_blank" rel="noopener noreferrer">
+                  Commit ↗
+                </a>
+              )}
+            </div>
+          )}
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
         </li>
       );

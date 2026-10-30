@@ -23,6 +23,7 @@ import {
 } from '../src/llm.ts';
 import {
   chatPause,
+  codeFilesFrom,
   diaryDay,
   searchObjection,
   isAccountError,
@@ -735,7 +736,7 @@ test('ruts: a topic that took over gets a rest, everywhere the character speaks 
 
 test('Code Lab: offered with the websites so far; the session sees the files and the sandbox rules', () => {
   const c = ctx(NOON);
-  c.projects = [{ slug: 'pond-clock', name: 'Pond Clock', description: 'A clock.', files: ['index.html'], lastCommit: 'Start' }];
+  c.projects = [{ slug: 'pond-clock', name: 'Pond Clock', description: 'A clock.', files: ['index.html'], lastCommit: 'Start', problems: [] }];
   assert.ok(!availableActivities(NOON).includes('code'));
   const prompt = decideUser(c, availableActivities(NOON, { canCode: true }));
   assert.match(prompt, /- code @ Code Lab \(60 min\): .* Your websites so far: "Pond Clock"\./);
@@ -746,6 +747,16 @@ test('Code Lab: offered with the websites so far; the session sees the files and
   assert.match(user, /<file path="index.html">\n<h1>Hi<\/h1>\n<\/file>/);
   assert.match(
     describeEvent({ id: 1, simTime: NOON, realTime: '', type: 'code_committed', data: { project: 'x', name: 'X', error: 'not allowed as a file: a.sh' } }) ?? '',
-    /the Code Lab refused it: not allowed as a file/,
+    /didn't work out \(not allowed as a file: a\.sh\)\. Nothing was saved\./,
   );
+});
+
+test('Code Lab: files arrive in whatever shape the model sends them', () => {
+  const want = [{ path: 'index.html', content: '<h1>Hi</h1>' }];
+  assert.deepEqual(codeFilesFrom(want), want);
+  assert.deepEqual(codeFilesFrom(JSON.stringify(want)), want, 'a JSON string');
+  assert.deepEqual(codeFilesFrom({ 'index.html': '<h1>Hi</h1>' }), want, 'a {path: content} object');
+  assert.deepEqual(codeFilesFrom([{ filename: 'index.html', code: '<h1>Hi</h1>' }]), want, 'other field names');
+  assert.deepEqual(codeFilesFrom('not json'), []);
+  assert.deepEqual(codeFilesFrom([{ path: 'a.js' }, null, 7]), []);
 });

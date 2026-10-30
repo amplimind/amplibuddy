@@ -1810,3 +1810,18 @@ code.sha {
 .feed-code p {
   margin-bottom: 4px;
 }
+
+.code-links {
+  margin-bottom: 6px;
+}
+
+.code-warnings {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fdf3e2;
+  color: #8a5a32;
+  font-size: 13px;
+  line-height: 1.4;
+}

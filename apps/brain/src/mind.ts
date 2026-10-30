@@ -122,6 +122,36 @@ export function toDecision(
   return { plan: { kind }, thought };
 }
 
+/**
+ * The files from a coding session, in whatever shape the model sent them: a list of
+ * {path, content} (the asked-for shape), the same list as a JSON string, a {path: content}
+ * object, or list items that call the fields name/filename and code/text.
+ */
+export function codeFilesFrom(value: unknown): { path: string; content: string }[] {
+  let v = value;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(v)) {
+    return v
+      .map((f: Record<string, unknown> | null) => ({
+        path: f?.path ?? f?.name ?? f?.filename ?? f?.file,
+        content: f?.content ?? f?.code ?? f?.text ?? f?.body,
+      }))
+      .filter((f): f is { path: string; content: string } => typeof f.path === 'string' && typeof f.content === 'string');
+  }
+  if (v && typeof v === 'object') {
+    return Object.entries(v as Record<string, unknown>)
+      .filter((e): e is [string, string] => typeof e[1] === 'string')
+      .map(([path, content]) => ({ path, content }));
+  }
+  return [];
+}
+
 /** Why a search would go round in circles, or null if it's fine. */
 export function searchObjection(query: string, ctx: BrainContext): string | null {
   const repeat = repeatedSearch(query, ctx.recentSearches);
@@ -554,17 +584,28 @@ export class Mind {
       const { args, meta } = await this.llm({
         model: this.cfg.brainModel,
         system: codeSystem(this.persona),
-        user: codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen }, current),
+        user: codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen, problems: chosen?.problems ?? [] }, current),
         tool: codeTool,
         maxTokens: 12_000,
         temperature: 0.7,
       });
-      const files = (Array.isArray(args.files) ? args.files : [])
-        .filter((f): f is { path: string; content: string } => typeof f?.path === 'string' && typeof f?.content === 'string')
-        .map((f) => ({ path: f.path, content: f.content }));
+      const files = codeFilesFrom(args.files);
       const deleted = (Array.isArray(args.deleted) ? args.deleted : []).filter((d): d is string => typeof d === 'string');
       const message = typeof args.message === 'string' ? args.message.trim() : '';
-      if (files.length === 0 && deleted.length === 0) throw new Error('the session produced no files');
+      if (files.length === 0 && deleted.length === 0) {
+        // Tell the town, so the character doesn't believe it built something.
+        const shape = Array.isArray(args.files) ? `a list of ${args.files.length}` : typeof args.files;
+        console.warn(`[brain] coding produced no usable files (got ${shape})`);
+        await this.sim.code({
+          project: chosen?.slug ?? name,
+          files: [],
+          message: idea,
+          failed: 'the code came out garbled, no files were written',
+          raw: JSON.stringify(args),
+          llm: [meta, plan.meta],
+        });
+        return;
+      }
 
       // What the page shows is public: check it like a painting.
       const check = await this.moderate('code', files.map((f) => `--- ${f.path}\n${f.content}`).join('\n\n').slice(0, 8000));
@@ -581,6 +622,10 @@ export class Mind {
       console.log(`[brain] coded "${name}": ${message || idea} (${status}, ${cost(meta)})`);
     } catch (err) {
       console.warn('[brain] coding failed:', (err as Error).message);
+      // Unless the sim already logged why (it refused the files), tell it the session didn't work out.
+      if (!(err instanceof SimError)) {
+        await this.sim.code({ project: 'a website', files: [], message: 'x', failed: 'the session broke off before anything was saved' }).catch(() => {});
+      }
     }
   }
 

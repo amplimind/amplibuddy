@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CodeProject, WorldEvent } from '@ampli-world/shared';
 import { createApp } from '../src/http.ts';
+import { checkProject } from '../src/check.ts';
 import { CommitError, GitServer, Projects } from '../src/projects.ts';
 import { SITE_CSP, createSitesApp } from '../src/sites.ts';
 import { Sim } from '../src/sim.ts';
@@ -136,11 +137,45 @@ test('code: the brain commits through the sim; refusals are logged so the charac
     [['Pond Clock', 'Start', false, false], ['pond-clock', null, true, false], ['Evil', null, false, true]],
   );
   assert.equal(sim.projects.slugs().includes('evil'), false, 'held code is never saved');
+  const first = events[0]!;
+  assert.equal(first.type === 'code_committed' && first.data.url, 'http://localhost:4380/pond-clock/', 'the feed can link to the site');
 
   const listed = (await (await app.request('/api/projects')).json()) as CodeProject[];
   assert.deepEqual(listed.map((p) => p.slug), ['pond-clock']);
   const files = (await (await brain('/api/brain/projects/pond-clock/files')).json()) as { path: string }[];
   assert.deepEqual(files.map((f) => f.path), ['index.html']);
   const context = (await (await brain('/api/brain/context')).json()) as { projects: { slug: string; lastCommit: string }[] };
-  assert.deepEqual(context.projects, [{ slug: 'pond-clock', name: 'Pond Clock', description: '', files: ['index.html'], lastCommit: 'Start' }]);
+  assert.deepEqual(context.projects, [{ slug: 'pond-clock', name: 'Pond Clock', description: '', files: ['index.html'], lastCommit: 'Start', problems: ['index.html links to app.js, which isn\'t in the project'] }]);
+});
+
+test('code: after each commit the Code Lab says what is wrong, without running anything', () => {
+  const ok = [
+    { path: 'index.html', content: '<!doctype html><link rel="stylesheet" href="style.css"><script src="js/app.js" defer></script><script>const x = 1;</script><canvas></canvas>' },
+    { path: 'style.css', content: 'body{}' },
+    { path: 'js/app.js', content: 'const ctx = document.querySelector("canvas").getContext("2d");' },
+  ];
+  assert.deepEqual(checkProject(ok), []);
+
+  const problems = checkProject([
+    { path: 'index.html', content: '<script type="module" src="app.js"></script>\n<link href="https://fonts.example.com/x.css" rel="stylesheet">\n<img src="/pond.svg">\n<form><input></form>\n<script>\nlet a = ;\n</script>' },
+    { path: 'app.js', content: 'function go( {\n  fetch("/api");\n}' },
+    { path: 'game.js', content: 'localStorage.setItem("s", 1); alert("hi");' },
+    { path: 'data.json', content: '{ broken' },
+  ]);
+  const has = (re: RegExp) => assert.ok(problems.some((p) => re.test(p)), `${re} in ${JSON.stringify(problems, null, 1)}`);
+  has(/^app\.js, line 2: /);
+  has(/index\.html \(inline script\), line 6: Unexpected token/);
+  has(/type="module"/);
+  has(/loads https:\/\/fonts\.example\.com\/x\.css from the internet/);
+  has(/leading slash/);
+  has(/<form>/);
+  has(/game\.js stores data in the browser/);
+  assert.equal(problems.length, 8, 'kept short: the first eight');
+  const more = checkProject([
+    { path: 'index.html', content: '<p>hi</p>' },
+    { path: 'game.js', content: 'alert("hi");' },
+    { path: 'data.json', content: '{ broken' },
+  ]);
+  assert.ok(more.some((p) => /alert\/confirm\/prompt/.test(p)) && more.some((p) => /^data\.json: /.test(p)), JSON.stringify(more));
+  assert.deepEqual(checkProject([{ path: 'app.js', content: '1' }]), ['there is no index.html, so the site has no start page']);
 });
