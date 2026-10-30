@@ -66,6 +66,7 @@ import {
   codePlanTool,
   codePlanUser,
   codeSystem,
+  codeFixUser,
   codeTool,
   codeUser,
   bellSystem,
@@ -123,6 +124,28 @@ export function toDecision(
 }
 
 /**
+ * JSON that a model wrote by hand, where one quote inside a string sometimes isn't
+ * escaped (`id="play">` in HTML). Each parse error points just past such a quote: escape it
+ * and try again, a few times. Undefined if it still isn't JSON.
+ */
+export function parseLooseJson(text: string): unknown {
+  let s = text;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      return JSON.parse(s);
+    } catch (err) {
+      const at = /position (\d+)/.exec((err as Error).message)?.[1];
+      if (at === undefined) return undefined;
+      let quote = s.lastIndexOf('"', Number(at));
+      while (quote > 0 && s[quote - 1] === '\\') quote = s.lastIndexOf('"', quote - 1);
+      if (quote <= 0) return undefined;
+      s = `${s.slice(0, quote)}\\${s.slice(quote)}`;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The files from a coding session, in whatever shape the model sent them: a list of
  * {path, content} (the asked-for shape), the same list as a JSON string, a {path: content}
  * object, or list items that call the fields name/filename and code/text.
@@ -130,11 +153,8 @@ export function toDecision(
 export function codeFilesFrom(value: unknown): { path: string; content: string }[] {
   let v = value;
   if (typeof v === 'string') {
-    try {
-      v = JSON.parse(v);
-    } catch {
-      return [];
-    }
+    v = parseLooseJson(v);
+    if (v === undefined) return [];
   }
   if (Array.isArray(v)) {
     return v
@@ -589,8 +609,36 @@ export class Mind {
         maxTokens: 12_000,
         temperature: 0.7,
       });
-      const files = codeFilesFrom(args.files);
+      let files = codeFilesFrom(args.files);
       const deleted = (Array.isArray(args.deleted) ? args.deleted : []).filter((d): d is string => typeof d === 'string');
+      const metas = [meta, plan.meta];
+      const project = chosen?.slug ?? name;
+
+      // A dry run before committing: if a linked file is missing or a script doesn't
+      // compile, ask once more in the same session, with the problems spelled out.
+      if (files.length > 0) {
+        const { problems } = await this.sim.codeCheck({ project, files, deleted });
+        if (problems.length > 0) {
+          console.log(`[brain] code check before commit: ${problems.join('; ')}`);
+          const fix = await this.llm({
+            model: this.cfg.brainModel,
+            system: codeSystem(this.persona),
+            user: `${codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen }, [...current, ...files])}\n\n${codeFixUser(files.map((f) => f.path), problems)}`,
+            tool: codeTool,
+            maxTokens: 12_000,
+            temperature: 0.5,
+          }).catch((err: Error) => {
+            console.warn('[brain] fixing the code failed:', err.message);
+            return null;
+          });
+          if (fix) {
+            metas.push(fix.meta);
+            const byPath = new Map(files.map((f) => [f.path, f]));
+            for (const f of codeFilesFrom(fix.args.files)) byPath.set(f.path, f);
+            files = [...byPath.values()];
+          }
+        }
+      }
       const message = typeof args.message === 'string' ? args.message.trim() : '';
       if (files.length === 0 && deleted.length === 0) {
         // Tell the town, so the character doesn't believe it built something.
@@ -610,13 +658,13 @@ export class Mind {
       // What the page shows is public: check it like a painting.
       const check = await this.moderate('code', files.map((f) => `--- ${f.path}\n${f.content}`).join('\n\n').slice(0, 8000));
       await this.sim.code({
-        project: chosen?.slug ?? name,
+        project,
         ...(chosen ? {} : { description: typeof args.description === 'string' ? args.description : idea }),
         files,
         deleted,
         message: message || idea,
         ...(check.verdict === 'hold' ? { held: true } : {}),
-        llm: [meta, plan.meta, check.meta],
+        llm: [...metas, check.meta],
       });
       const status = check.verdict === 'hold' ? `held (${check.reason})` : `${files.length} files`;
       console.log(`[brain] coded "${name}": ${message || idea} (${status}, ${cost(meta)})`);

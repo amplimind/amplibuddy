@@ -506,6 +506,14 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json(sim.projects.files(c.req.param('slug')));
   });
 
+  /** A dry run: what the check says about a session's files, before it commits them. */
+  app.post('/api/brain/code/check', async (c) => {
+    if (!sim.projects) return c.json({ error: 'the Code Lab is closed' }, 404);
+    const body = (await c.req.json().catch(() => null)) as CodeCommitRequest | null;
+    if (!isRecord(body) || typeof body.project !== 'string') return c.json({ error: 'bad request' }, 400);
+    return c.json({ problems: sim.projects.preview(body) });
+  });
+
   /** The end of a coding session: checked, saved, committed, and online at once. */
   app.post('/api/brain/code', async (c) => {
     if (!sim.projects) return c.json({ error: 'the Code Lab is closed' }, 404);

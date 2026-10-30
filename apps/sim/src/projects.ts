@@ -198,6 +198,25 @@ export class Projects {
   }
 
   /**
+   * What the check would say if this session were committed, without saving anything: so
+   * the character can still fix things (write a missing file) in the same session.
+   */
+  preview(req: Pick<CodeCommitRequest, 'project' | 'files' | 'deleted'>): string[] {
+    const merged = new Map(this.slugs().includes(req.project) ? this.files(req.project).map((f) => [f.path, f.content]) : []);
+    const refused: string[] = [];
+    for (const f of Array.isArray(req.files) ? req.files : []) {
+      const path = cleanProjectPath(f?.path);
+      if (path && typeof f.content === 'string') merged.set(path, f.content);
+      else refused.push(`not allowed as a file: ${String(f?.path).slice(0, 80)}`);
+    }
+    for (const d of Array.isArray(req.deleted) ? req.deleted : []) {
+      const path = cleanProjectPath(d);
+      if (path) merged.delete(path);
+    }
+    return [...refused, ...checkProject([...merged].map(([path, content]) => ({ path, content })))];
+  }
+
+  /**
    * Applies a coding session: checks every path and size, writes the files, records the
    * commit and mirrors it to the Git server (a failed mirror doesn't undo the local change).
    */

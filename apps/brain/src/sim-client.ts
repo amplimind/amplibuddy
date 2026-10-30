@@ -69,6 +69,10 @@ export class SimClient {
     return this.request('GET', `/api/brain/projects/${encodeURIComponent(slug)}/files`);
   }
 
+  codeCheck(body: Pick<CodeCommitRequest, 'project' | 'files' | 'deleted'>): Promise<{ problems: string[] }> {
+    return this.request('POST', '/api/brain/code/check', body);
+  }
+
   code(body: CodeCommitRequest): Promise<unknown> {
     return this.request('POST', '/api/brain/code', body);
   }

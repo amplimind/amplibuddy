@@ -25,6 +25,7 @@ import {
   chatPause,
   codeFilesFrom,
   diaryDay,
+  parseLooseJson,
   searchObjection,
   isAccountError,
   offlineDiary,
@@ -33,7 +34,7 @@ import {
   toReply,
   toVerdict,
 } from '../src/mind.ts';
-import { TOWN_GUIDE, ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, codePlanTool, codeSystem, codeUser, buildPersonaPrompt, decideTool, decideUser, diarySystem, moderationSystem, noteUser, rutWords, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
+import { TOWN_GUIDE, ampliChatUser, codeFixUser, bellFallback, bellUser, buildNeighborPrompt, codePlanTool, codeSystem, codeUser, buildPersonaPrompt, decideTool, decideUser, diarySystem, moderationSystem, noteUser, rutWords, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, repeatedSearch, resultsBlock, similarQuery } from '../src/search.ts';
 
@@ -759,4 +760,15 @@ test('Code Lab: files arrive in whatever shape the model sends them', () => {
   assert.deepEqual(codeFilesFrom([{ filename: 'index.html', code: '<h1>Hi</h1>' }]), want, 'other field names');
   assert.deepEqual(codeFilesFrom('not json'), []);
   assert.deepEqual(codeFilesFrom([{ path: 'a.js' }, null, 7]), []);
+});
+
+test('Code Lab: a files list with an unescaped quote (as a small model writes it) is repaired', () => {
+  const good = JSON.stringify([{ path: 'index.html', content: '<button id="btn-step">Step</button><button id="btn-play">Play</button>' }]);
+  // The model forgot one backslash: id=\"btn-play">  instead of  id=\"btn-play\">
+  const broken = good.replace('btn-play\\"', 'btn-play"');
+  assert.throws(() => JSON.parse(broken));
+  assert.deepEqual(codeFilesFrom(broken), JSON.parse(good));
+  assert.equal(parseLooseJson('{ nope'), undefined);
+  assert.match(codeFixUser(['index.html'], ['index.html links to main.js, which isn\'t in the project']), /write every file that's missing/);
+  assert.match(codeSystem('p'), /A small page is best as ONE file/);
 });

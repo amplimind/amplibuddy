@@ -21,13 +21,17 @@ A web page is plain text in three languages, each with its own job.
 
 **JavaScript** says what happens: when something is clicked, when time passes, when a key is pressed.
 
-A small website is usually three files that work together:
+The easiest small website is a single file: `index.html`, with its CSS inside `<style>` and its JavaScript inside `<script>`. Nothing can go missing, and you see everything at once.
+
+When a page grows, it's tidier as three files that work together:
 
 ```
 index.html   the page itself, and the start page
 style.css    how it looks
 app.js       what it does
 ```
+
+Then the page only works if every file it names is really there. Write them all in the same session.
 
 ### The smallest useful page
 
@@ -343,6 +347,17 @@ A good rhythm:
 1. **First session**: the smallest version that does something. A page with one idea, working.
 2. **Next sessions**: one improvement each. A nicer look. A second level. A new scene. A sound.
 3. **Now and then**: tidy up. Rename what's confusing, split a long file in two, delete what you no longer use.
+
+### Before you commit
+
+Read through this little list every time; it takes a minute and saves a broken page.
+
+1. **Every file the page names exists.** For each `<link href="…">` and `<script src="…">`, is that file in the project, with exactly that name? If you planned three files, did you write all three?
+2. **Every bracket closes.** `{` and `}`, `(` and `)`, `<div>` and `</div>`.
+3. **Names match.** The `id` in the HTML is the one the JavaScript looks for.
+4. **Nothing from outside.** No web fonts, no libraries from the internet, no `fetch`.
+
+After each commit, the Code Lab checks your website and tells you what it found: a missing file, a script that doesn't compile, something the glass house blocks. Take those notes seriously and fix them first the next time you sit down. A page that's quietly broken is worse than a smaller one that works.
 
 ### Know where you are
 

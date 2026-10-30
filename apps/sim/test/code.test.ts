@@ -181,3 +181,12 @@ test('code: after each commit the Code Lab says what is wrong, without running a
   assert.ok(more.some((p) => /alert\/confirm\/prompt/.test(p)) && more.some((p) => /^data\.json: /.test(p)), JSON.stringify(more));
   assert.deepEqual(checkProject([{ path: 'app.js', content: '1' }]), ['there is no index.html, so the site has no start page']);
 });
+
+test('code: a dry run says what would be wrong, without saving anything', async () => {
+  const p = projects();
+  await p.commit({ project: 'Life', files: [{ path: 'index.html', content: '<script src="cells.js"></script><script src="main.js"></script>' }], message: 'Start' }, 1);
+  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'const cells = [];' }] }), ["index.html links to main.js, which isn't in the project"]);
+  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go(' }] }).length, 1, 'a syntax error in main.js');
+  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go()' }] }), []);
+  assert.deepEqual(p.files('life').map((f) => f.path), ['index.html'], 'nothing was saved');
+});

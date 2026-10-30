@@ -1086,6 +1086,7 @@ const CODE_RULES = `How the Code Lab works:
 - A website is plain HTML, CSS and JavaScript in a few files; index.html is the start page. No build tools, frameworks or libraries.
 - Everything lives in the project: nothing loads from the internet (no CDNs, web fonts, external images or APIs). The page runs in a sandbox: it can't make network requests, send forms or use localStorage. Drawing on a canvas, SVG, animations, buttons and games all work.
 - Small and finished beats big and broken: one idea per session that works when you're done.
+- A small page is best as ONE file: index.html with its CSS in <style> and its JavaScript in <script>. If you do split it into files, write every file it links to in the same commit; a page that links to a file you haven't written is broken.
 - Allowed files: .html .css .js .json .svg .txt .md, at most ${MAX_PROJECT_FILES} per project, each under ${MAX_FILE_CHARS} characters, the whole project under ${MAX_PROJECT_CHARS}.`;
 
 export function codePlanSystem(persona: string): string {
@@ -1123,6 +1124,16 @@ ${recentLines(ctx, 10).join('\n') || '(not much yet)'}
 
 Your websites:
 ${projects}`;
+}
+
+/** After the dry run: what's still missing or broken, to fix before the commit. */
+export function codeFixUser(written: string[], problems: string[]): string {
+  return `You wrote: ${written.join(', ') || '(nothing)'}.
+
+Before committing, the Code Lab checked the website and found:
+${problems.map((p) => `- ${p}`).join('\n')}
+
+Fix this now: write every file that's missing, and the complete corrected version of any file with an error (or put a script back into index.html). Only send the files you add or change.`;
 }
 
 /** Step 2: the files. */
