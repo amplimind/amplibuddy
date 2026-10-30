@@ -405,6 +405,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       mail: store.mailStats(),
       browsesToday: store.countEventsToday('browsed'),
       recentSearches: store.recentSearches(),
+      recentOwnTexts: store.recentOwnTexts(),
       artToday: store.countArtToday(),
       chatsToday: store.countActivityToday('chat'),
       // Per sim day: this limit keeps the board from flooding, it isn't about cost.

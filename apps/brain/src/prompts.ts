@@ -28,6 +28,7 @@ import {
   type WorldEvent,
 } from '@ampli-world/shared';
 import type { ToolSpec } from './llm.ts';
+import { contentWords, similarQuery } from './search.ts';
 
 // Prompt text lives here so it can be read and tuned in one place.
 
@@ -164,6 +165,49 @@ const OPTION_ORDER: ActivityKind[] = [
  * question mark), next to the places that can answer them. Curiosity needs a concrete
  * question before a web search makes sense.
  */
+// --- Ruts: one topic taking over -----------------------------------------------------------
+
+/** Words that say nothing about a topic: the everyday of the town and of thinking out loud. */
+const EVERYDAY = new Set(
+  (
+    'just want like feel feels felt something still time today morning evening afternoon night right next maybe really ' +
+    'thing things been have that this with from about what into there here some more much first last again back know need ' +
+    'think thinking going would could should them they their then than when where which while after over little good day ' +
+    'days now new also make made done let get got even only well very own other same every because one two said says ' +
+    'question questions answer answered answers read reading book books look looking walk wander stroll coffee food eat ' +
+    'hungry sleep tired bench town home cafe café kiosk park library plaza internet studio workshop notice board note ' +
+    'notes painting paint people watch watching company quiet settle settled moment finished finish started start found ' +
+    'learned tried sitting staying came coming sure mind head stomach belly enough feeling while long little warm small ' +
+    'place around always never ever since already thought thoughts'
+  ).split(' '),
+);
+
+/**
+ * A topic the character can't let go of: content words in many of the things it said
+ * lately (thoughts, notes, searches, paintings, chat lines; at least 5, and 40 %). Names of
+ * beings in town don't count.
+ */
+export function rutWords(ctx: BrainContext): { words: string[]; inThoughts: number; of: number } | null {
+  const thoughts = ctx.recentOwnTexts.slice(-20);
+  if (thoughts.length < 10) return null;
+  const names = new Set([ctx.snapshot.persona.name, ...ctx.snapshot.neighbors.map((n) => n.name)].map((n) => n.toLowerCase()));
+  const sets = thoughts.map((t) => [...contentWords(t)].filter((w) => w.length > 3 && !EVERYDAY.has(w) && !names.has(w)));
+  const counts = new Map<string, number>();
+  for (const set of sets) for (const w of set) counts.set(w, (counts.get(w) ?? 0) + 1);
+  const min = Math.max(5, Math.ceil(thoughts.length * 0.4));
+  const words = [...counts].filter(([, n]) => n >= min).sort((a, b) => b[1] - a[1]).map(([w]) => w).slice(0, 3);
+  if (words.length === 0) return null;
+  const inThoughts = sets.filter((set) => set.some((w) => words.includes(w))).length;
+  return { words, inThoughts, of: thoughts.length };
+}
+
+/** Said once wherever the character speaks: let the topic rest, and don't make a topic of resting it. */
+export function rutBlock(ctx: BrainContext): string {
+  const rut = rutWords(ctx);
+  if (!rut) return '';
+  return `\nLately you keep coming back to ${rut.words.map((w) => `"${w}"`).join(', ')} (in ${rut.inThoughts} of the last ${rut.of} things you thought, wrote, searched or painted). That's enough of it for now: let it rest and think, talk and write about something else. Don't mention it, and don't mention that you're letting it go.\n`;
+}
+
 /** What was already looked up, with what came of it: so the next search builds on it. */
 export function searchedBlock(ctx: BrainContext): string {
   const searches = ctx.recentSearches.slice(-6);
@@ -180,7 +224,14 @@ export function wonderingBlock(ctx: BrainContext, kinds: ActivityKind[]): string
     .filter((e) => e.type === 'reading' && e.data.takeaway.includes('?'))
     .map((e) => (e.type === 'reading' ? e.data.takeaway.slice(e.data.takeaway.lastIndexOf('.', e.data.takeaway.indexOf('?')) + 1).trim() : ''))
     .filter(Boolean);
-  const questions = [...new Set([...fromNotebook, ...fromReading])].slice(-3);
+  // Questions already looked up, or about the topic it's stuck on, would only send it round again.
+  const rut = rutWords(ctx)?.words ?? [];
+  const explored = (q: string) => {
+    const words = contentWords(q);
+    const sharedWith = (query: string) => [...contentWords(query)].filter((w) => words.has(w)).length;
+    return ctx.recentSearches.some((s) => similarQuery(q, s.query) || sharedWith(s.query) >= 3) || [...words].some((w) => rut.includes(w));
+  };
+  const questions = [...new Set([...fromNotebook, ...fromReading])].filter((q) => !explored(q)).slice(-3);
   if (questions.length === 0) return '';
   const where = [
     kinds.includes('browse') && 'look facts up at the internet café',
@@ -407,7 +458,7 @@ How you feel:
 
 Your notebook (your long-term memory):
 ${notebookBlock(ctx.notebook)}
-${wonderingBlock(ctx, kinds)}${kinds.includes('browse') ? searchedBlock(ctx) : ''}
+${wonderingBlock(ctx, kinds)}${kinds.includes('browse') ? searchedBlock(ctx) : ''}${rutBlock(ctx)}
 Your last diary entry:
 ${diaryBlock(ctx.lastDiary)}
 
@@ -507,6 +558,7 @@ You are curling up in bed at the end of the day. Before you fall asleep:
 2. Rewrite your notebook. It is your only long-term memory: preferences, opinions, things you learned from books, open questions, plans. Keep what still matters, update what changed, merge duplicates, drop what no longer matters. At most ${NOTEBOOK_LIMIT} short notes.
    Among them, keep one or two concrete things you'd like to find out, phrased as a question: facts you could look up or read about, not only big questions about life.
    Drop questions and habits you've been circling for days without getting anywhere, or turn them into something concrete. Only keep notes about beings who actually live in town (listed below) or people who wrote to you.
+   A question you found the answer to is not open anymore: replace it with the answer in one line, and don't ask it again in other words. No topic gets more than two notes; if one filled your last days, boil it down and make room for other things.
 Answer by calling the \`write_diary\` tool once.`;
 }
 
@@ -754,7 +806,7 @@ export function paintUser(ctx: BrainContext): string {
 
 Your notebook:
 ${notebookBlock(ctx.notebook)}
-
+${rutBlock(ctx)}
 What happened recently (oldest first):
 ${recent.length > 0 ? recent.join('\n') : '(not much yet)'}`;
 }
@@ -812,7 +864,7 @@ Mood: ${agent.mood.label}. Energy ${describeNeed(n.energy)}, hunger ${describeNe
 
 Your notebook:
 ${notebookBlock(ctx.notebook)}
-
+${rutBlock(ctx)}
 What happened recently:
 ${recent.join('\n') || '(not much yet)'}
 
@@ -913,7 +965,7 @@ export function noteUser(ctx: BrainContext): string {
 
 Your notebook:
 ${notebookBlock(ctx.notebook)}
-
+${rutBlock(ctx)}
 What happened recently (oldest first, including earlier notes and letters):
 ${recent.join('\n') || '(not much yet)'}`;
 }

@@ -172,7 +172,8 @@ const STOPWORDS = new Set(
   'a an and are at be before by can do does for from how in into is it its of on or that the their them this to under what when where which who why with'.split(' '),
 );
 
-function searchWords(query: string): Set<string> {
+/** The words that carry meaning: lowercase, no stopwords, plurals folded. */
+export function contentWords(query: string): Set<string> {
   return new Set(
     query
       .toLowerCase()
@@ -184,8 +185,8 @@ function searchWords(query: string): Set<string> {
 
 /** Same question in other words? Enough shared words, or one query almost inside the other. */
 export function similarQuery(a: string, b: string): boolean {
-  const x = searchWords(a);
-  const y = searchWords(b);
+  const x = contentWords(a);
+  const y = contentWords(b);
   if (x.size === 0 || y.size === 0) return false;
   const shared = [...x].filter((w) => y.has(w)).length;
   return shared / (x.size + y.size - shared) >= 0.4 || shared / Math.min(x.size, y.size) >= 0.75;

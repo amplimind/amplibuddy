@@ -66,6 +66,7 @@ import {
   bellTool,
   bellUser,
   presentNeighbors,
+  rutWords,
   workshopSystem,
   workshopTool,
   workshopUser,
@@ -73,7 +74,7 @@ import {
   type ModerationTarget,
 } from './prompts.ts';
 import { availableActivities, leastReadBook, offlineDecision, routineDecision } from './routine.ts';
-import { ollamaSearch, repeatedSearch, resultsBlock, searxngSearch, wikipediaSearch, withTopPage } from './search.ts';
+import { contentWords, ollamaSearch, repeatedSearch, resultsBlock, searxngSearch, wikipediaSearch, withTopPage } from './search.ts';
 import { SimError, type SimClient } from './sim-client.ts';
 
 /** Sleep that starts before 06:00 still belongs to the previous day's diary. */
@@ -113,6 +114,21 @@ export function toDecision(
     return { plan: { kind, partnerId: partner.id }, thought };
   }
   return { plan: { kind }, thought };
+}
+
+/** Why a search would go round in circles, or null if it's fine. */
+export function searchObjection(query: string, ctx: BrainContext): string | null {
+  const repeat = repeatedSearch(query, ctx.recentSearches);
+  if (repeat) {
+    const learned = repeat.takeaway ? ` and found: ${repeat.takeaway.slice(0, 200)}` : '';
+    return `you already looked that up as "${repeat.query}"${learned}. Use what you found, or look up something different`;
+  }
+  const rut = rutWords(ctx)?.words ?? [];
+  const stuck = [...contentWords(query)].filter((w) => rut.includes(w));
+  if (stuck.length > 0) {
+    return `you've been on ${stuck.map((w) => `"${w}"`).join(', ')} for a long while already. Look up something else, or do something else`;
+  }
+  return null;
 }
 
 /** Diary for when the LLM is unavailable: a plain tally of the day, notebook untouched. */
@@ -358,17 +374,14 @@ export class Mind {
         return toDecision(args, meta, ctx, kinds);
       };
       let decision = await ask(unavailable);
-      // The same question in other words: say so once and let it choose again.
-      const repeat = decision.plan.query ? repeatedSearch(decision.plan.query, ctx.recentSearches) : undefined;
-      if (repeat) {
-        console.log(`[brain] "${decision.plan.query}" repeats "${repeat.query}", asking again`);
-        const learned = repeat.takeaway ? ` and found: ${repeat.takeaway.slice(0, 200)}` : '';
-        decision = await ask([
-          ...unavailable,
-          `browse "${decision.plan.query}": you already looked that up as "${repeat.query}"${learned}. Use what you found, or look up something different`,
-        ]);
-        if (decision.plan.query && repeatedSearch(decision.plan.query, ctx.recentSearches)) {
-          throw new Error(`search "${decision.plan.query}" repeats an earlier one`);
+      // The same question in other words, or more of the topic it's stuck on: say so once
+      // and let it choose again.
+      const objection = decision.plan.query ? searchObjection(decision.plan.query, ctx) : null;
+      if (objection) {
+        console.log(`[brain] search "${decision.plan.query}" refused (${objection}), asking again`);
+        decision = await ask([...unavailable, `browse "${decision.plan.query}": ${objection}`]);
+        if (decision.plan.query && searchObjection(decision.plan.query, ctx)) {
+          throw new Error(`search "${decision.plan.query}" goes round in circles`);
         }
       }
       if (decision.plan.query) {

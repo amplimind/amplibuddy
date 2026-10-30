@@ -251,6 +251,8 @@ export interface BrainContext {
   browsesToday: number;
   /** The latest web searches (newest last), so the character doesn't look up the same thing again. */
   recentSearches: { query: string; takeaway?: string; simTime: number }[];
+  /** What the character itself said lately (thoughts, notes, searches, paintings, chat lines), oldest first. */
+  recentOwnTexts: string[];
   /** Artworks since 00:00 UTC, for the daily cap. */
   artToday: number;
   /** Chats started since 00:00 UTC, for the daily cap. */

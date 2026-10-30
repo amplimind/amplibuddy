@@ -288,6 +288,24 @@ export class Store {
     return Number(row.n);
   }
 
+  /** What the character itself said lately, oldest first: to notice when one topic takes over. */
+  recentOwnTexts(limit = 20): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT type, data FROM events
+         WHERE (type = 'thought' AND json_extract(data, '$.source') = 'llm')
+            OR (type = 'note_posted' AND json_extract(data, '$.text') IS NOT NULL)
+            OR type IN ('browsed', 'artwork_created')
+            OR (type = 'chat_line' AND json_extract(data, '$.speaker') = 'ampli')
+         ORDER BY id DESC LIMIT ?`,
+      )
+      .all(limit) as Row[];
+    return rows.reverse().map((r) => {
+      const d = JSON.parse(String(r.data)) as { text?: string; query?: string; title?: string; caption?: string };
+      return r.type === 'browsed' ? (d.query ?? '') : r.type === 'artwork_created' ? `${d.title}. ${d.caption}` : (d.text ?? '');
+    });
+  }
+
   /** The latest web searches, oldest first. */
   recentSearches(limit = 8): { query: string; takeaway?: string; simTime: number }[] {
     const rows = this.db

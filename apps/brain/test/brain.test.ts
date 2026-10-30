@@ -24,6 +24,7 @@ import {
 import {
   chatPause,
   diaryDay,
+  searchObjection,
   isAccountError,
   offlineDiary,
   searchSkipMs,
@@ -31,7 +32,7 @@ import {
   toReply,
   toVerdict,
 } from '../src/mind.ts';
-import { ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, buildPersonaPrompt, decideTool, decideUser, moderationSystem, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
+import { ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, buildPersonaPrompt, decideTool, decideUser, diarySystem, moderationSystem, noteUser, rutWords, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, repeatedSearch, resultsBlock, similarQuery } from '../src/search.ts';
 
@@ -73,6 +74,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     mail: { waiting: 0, oldestSimTime: null, answers: 0, oldestAnswerSimTime: null },
     browsesToday: 0,
     recentSearches: [],
+    recentOwnTexts: [],
     artToday: 0,
     chatsToday: 0,
     notesToday: 0,
@@ -704,4 +706,26 @@ test('searches: the same question in other words counts as a repeat; a new angle
   assert.match(prompt, /What you already looked up at the internet café/);
   assert.match(prompt, /- "winter fish kills oxygen depletion fish behavior gasping at surface": Low oxygen\./);
   assert.doesNotMatch(decideUser(c, availableActivities(NOON)), /already looked up/, 'only when browsing is an option');
+});
+
+test('ruts: a topic that took over gets a rest, everywhere the character speaks or searches', () => {
+  const c = ctx(NOON);
+  const everyday = ['Coffee at the kiosk with Hedda.', 'A stroll in the park, finished.', 'Time for a nap.', 'The library is open.', 'Painting the plaza in blue.', 'Hedda laughed at my joke.', 'Reading about questions.', 'A letter came!', 'Bed soon.', 'Sun on the bench.', 'Hungry again.'];
+  c.recentOwnTexts = [...Array.from({ length: 9 }, (_, i) => `The fish under the ice again (${i}).`), ...everyday];
+  assert.deepEqual(rutWords(c), { words: ['fish'], inThoughts: 9, of: 20 }, 'Hedda, coffee and "finished" are just the everyday');
+  assert.match(decideUser(c, availableActivities(NOON, { canBrowse: true })), /Lately you keep coming back to "fish" \(in 9 of the last 20/);
+  assert.match(noteUser(c), /Lately you keep coming back to "fish"/);
+  assert.match(ampliChatUser(c, 'Hedda', []), /Lately you keep coming back to "fish"/);
+
+  c.notebook = ['What do fish actually do under the ice?', 'Which hedgehogs sleep longest in winter?'];
+  const wondering = wonderingBlock(c, availableActivities(NOON, { canBrowse: true }));
+  assert.doesNotMatch(wondering, /What do fish actually do/, 'no wondering about the rut topic');
+  assert.match(wondering, /Which hedgehogs sleep longest/);
+
+  assert.match(searchObjection('fish behaviour under thin ice', c)!, /you've been on "fish" for a long while/);
+  assert.equal(searchObjection('how do hedgehogs hibernate', c), null);
+
+  c.recentOwnTexts = c.recentOwnTexts.slice(0, 9);
+  assert.equal(rutWords(c), null, 'too little said to call it a rut');
+  assert.match(diarySystem('p'), /A question you found the answer to is not open anymore/);
 });
