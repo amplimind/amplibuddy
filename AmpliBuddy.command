@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click to start Ampli World.
+# Double-click to start AmpliBuddy.
 # The first start sets everything up (a few minutes); later starts take seconds.
 # Close this window to stop it.
 
@@ -41,5 +41,5 @@ if [ ! -f apps/web/dist/index.html ] || [ -n "$(find apps/web packages/shared/sr
   npm run build --silent
 fi
 
-say "Starting Ampli World…"
+say "Starting AmpliBuddy…"
 exec node --disable-warning=ExperimentalWarning --import tsx scripts/start.ts

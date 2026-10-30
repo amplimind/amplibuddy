@@ -13,7 +13,7 @@ export interface SearchHit extends WebSource {
 
 const TIMEOUT_MS = 20_000;
 const MAX_CONTENT_CHARS = 1500;
-const USER_AGENT = 'ampli-world/0.1 (internal AI demo; https://github.com/DennisMuellerAM/ampliworld)';
+const USER_AGENT = 'amplibuddy/0.1 (AI demo; https://github.com/amplimind/amplibuddy)';
 
 /** Ollama and SearXNG both answer with { results: [{ title, url, content }] }. */
 export function parseOllamaResults(data: unknown): SearchHit[] {

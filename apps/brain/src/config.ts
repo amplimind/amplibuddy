@@ -121,7 +121,7 @@ export interface NeighborPersona {
 
 export function loadNeighborPersonas(): NeighborPersona[] {
   const dir = neighborsDir();
-  const town = parseFrontmatter(readFileSync(personaFile(), 'utf8')).meta.town ?? 'Ampliville';
+  const town = parseFrontmatter(readFileSync(personaFile(), 'utf8')).meta.town ?? 'Mindhaven';
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith('.md'))

@@ -1,6 +1,6 @@
-// Starts Ampli World for everyday use: the sim (which also serves the web page) and the
+// Starts AmpliBuddy for everyday use: the sim (which also serves the web page) and the
 // brain, restarted whenever the setup wizard saves something, and the browser opened once
-// the town is up. `Ampli World.command` runs this after installing and building.
+// the town is up. `AmpliBuddy.command` runs this after installing and building.
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -70,7 +70,7 @@ async function openWhenReady(): Promise<void> {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/setup/status`);
       if (res.ok) {
-        console.log(`\n  Ampli World is running at ${url}\n  Close this window (or press Ctrl+C) to stop it.\n`);
+        console.log(`\n  AmpliBuddy is running at ${url}\n  Close this window (or press Ctrl+C) to stop it.\n`);
         if (!process.env.AMPLI_NO_BROWSER) spawn('open', [url], { stdio: 'ignore' });
         return;
       }

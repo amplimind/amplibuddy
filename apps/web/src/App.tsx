@@ -38,7 +38,7 @@ export function App() {
               🏡
             </span>
             <div>
-              <h1>Ampli World</h1>
+              <h1>AmpliBuddy</h1>
               <p className="subtitle">set up your town</p>
             </div>
           </div>
@@ -64,7 +64,7 @@ function Town({ canConfigure }: { canConfigure: boolean }) {
             {snapshot ? <CritterPreview look={snapshot.persona.look} size={40} /> : '🏡'}
           </span>
           <div>
-            <h1>{snapshot ? `${snapshot.persona.town}` : 'Ampli World'}</h1>
+            <h1>{snapshot ? `${snapshot.persona.town}` : 'AmpliBuddy'}</h1>
             <p className="subtitle">
               {snapshot
                 ? `home of ${snapshot.persona.name}, a ${snapshot.persona.species} with an AI for a mind`

@@ -189,7 +189,7 @@ export function Admin() {
     return (
       <div className="app admin">
         <form className="card letter-form admin-login" onSubmit={login}>
-          <h3>Ampli World admin</h3>
+          <h3>AmpliBuddy admin</h3>
           <label>
             Admin token
             <input type="password" value={draft} onChange={(e) => setDraft(e.target.value)} autoComplete="off" required />
@@ -205,7 +205,7 @@ export function Admin() {
     <div className="app admin">
       <header className="topbar">
         <div>
-          <h1>Ampli World admin</h1>
+          <h1>AmpliBuddy admin</h1>
           <p className="subtitle">
             <a href="/">← back to town</a>
           </p>

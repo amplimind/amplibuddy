@@ -134,7 +134,7 @@ export async function extractPdf(bytes: Uint8Array, fileName: string): Promise<P
   try {
     unpdf = await import('unpdf');
   } catch {
-    throw new PdfSupportMissing('PDF support is not installed yet: run `npm install` in the Ampli World folder.');
+    throw new PdfSupportMissing('PDF support is not installed yet: run `npm install` in the AmpliBuddy folder.');
   }
   const pdf = await unpdf.getDocumentProxy(bytes, { disableFontFace: true });
   const { totalPages, text } = await unpdf.extractText(pdf, { mergePages: false });

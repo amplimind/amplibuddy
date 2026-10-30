@@ -216,7 +216,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     const password = opts.sitePassword;
     const gate = basicAuth({
       verifyUser: (_username, given) => tokenMatches(given, password),
-      realm: 'Ampli World',
+      realm: 'AmpliBuddy',
     });
     app.use('*', async (c, next) => (c.req.path.startsWith('/api/brain/') ? next() : gate(c, next)));
   }

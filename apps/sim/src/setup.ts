@@ -126,7 +126,7 @@ function readPersona(): PersonaDraft {
     name: meta.name ?? 'Ampli',
     species: meta.species ?? 'small fox',
     look: lookOf(meta.species, meta.look),
-    town: meta.town ?? 'Ampliville',
+    town: meta.town ?? 'Mindhaven',
     personality: body,
   };
 }
@@ -215,7 +215,7 @@ function personaFileText(p: PersonaDraft): string {
   const name = line(p.name, MAX_SETUP_NAME_CHARS) || 'Ampli';
   const species = line(p.species, MAX_SETUP_SPECIES_CHARS) || LOOK_INFO[isLook(p.look) ? p.look : 'fox'].species;
   const look = isLook(p.look) ? p.look : lookOf(species);
-  const town = line(p.town, MAX_SETUP_NAME_CHARS) || 'Ampliville';
+  const town = line(p.town, MAX_SETUP_NAME_CHARS) || 'Mindhaven';
   return `---\nname: ${name}\nspecies: ${species}\nlook: ${look}\ntown: ${town}\n---\n${personality(p.personality)}\n`;
 }
 

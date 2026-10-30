@@ -695,7 +695,7 @@ function GitStatus() {
                 </a>
               ) : (
                 <>
-                  Needs Docker Desktop. In the Terminal, in the Ampli World folder: <code>npm run git:start</code>
+                  Needs Docker Desktop. In the Terminal, in the AmpliBuddy folder: <code>npm run git:start</code>
                 </>
               )}
             </p>

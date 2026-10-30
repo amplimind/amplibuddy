@@ -1,10 +1,10 @@
-# Ampli World
+# AmpliBuddy
 
 A tiny town where an AI character lives its own life. **Ampli**, a small fox, gets hungry, tired, bored and lonely, decides for itself what to do about it, reads books, looks things up on the web, paints, chats with the neighbours and writes a diary every night. You watch, and you can see exactly how every thought was made.
 
 It's a door-opener: people get used to AI by watching an agent behave instead of being asked to prompt one. Inspired by [Pino](https://pinos.world/).
 
-![Ampliville: the town on the left, Ampli's thoughts and a chat with Hedda the hedgehog on the right](docs/images/town.jpg)
+![A town: the map on the left, Ampli's thoughts and a chat with Hedda the hedgehog on the right](docs/images/town.jpg)
 
 - [What you're looking at](#what-youre-looking-at)
 - [Set it up on your Mac](#set-it-up-on-your-mac)
@@ -34,11 +34,11 @@ No programming needed. Takes about 15 minutes, most of it waiting for downloads.
 
 ### 1. Download
 
-On the [GitHub page](https://github.com/DennisMuellerAM/ampliworld) click **Code → Download ZIP**, then double-click the ZIP to unpack it. Move the folder wherever you like, e.g. into Documents.
+On the [GitHub page](https://github.com/amplimind/amplibuddy) click **Code → Download ZIP**, then double-click the ZIP to unpack it. Move the folder wherever you like, e.g. into Documents.
 
 ### 2. Start
 
-Double-click **`Ampli World.command`** in the folder.
+Double-click **`AmpliBuddy.command`** in the folder.
 
 The very first time, macOS says it can't check the developer. That's expected for an internal tool: **right-click the file → Open → Open** (or System Settings → Privacy & Security → *Open Anyway*). You only do this once.
 
@@ -72,7 +72,7 @@ A Terminal window opens. The first start downloads Node.js (only if your Mac doe
 ## Everyday use
 
 - **Stop**: close the Terminal window (or press Ctrl+C in it). The town pauses; nothing is lost.
-- **Start again**: double-click `Ampli World.command`. Later starts take seconds.
+- **Start again**: double-click `AmpliBuddy.command`. Later starts take seconds.
 - **Change anything**: **⚙️** at the top right: character, personality, brain, neighbours, the library, how fast time goes, GyrOS. Saving restarts the town for a few seconds; memories and the diary stay. To run the whole wizard again, open http://localhost:4300/?setup.
 - **Speed**: *calm* (a day takes 4 hours, the default), *lively* (24 minutes) or *real time*. Faster means more thoughts per hour, which in the cloud costs more.
 - **Update**: download the new ZIP, unpack it, and move the `data` folder from your old folder into the new one. That folder is your whole town: settings, characters, memories, diary, letters, paintings.
@@ -85,9 +85,9 @@ Everything stays on your Mac: the town only listens on this computer (others on 
 
 | What you see | What to do |
 |---|---|
-| "can't be opened because Apple cannot check it" | Right-click `Ampli World.command` → Open → Open. Once. |
+| "can't be opened because Apple cannot check it" | Right-click `AmpliBuddy.command` → Open → Open. Once. |
 | The browser doesn't open | Open http://localhost:4300 yourself. The Terminal window shows what's happening. |
-| "address already in use" in the Terminal | Ampli World is already running in another Terminal window. Close the other one. |
+| "address already in use" in the Terminal | AmpliBuddy is already running in another Terminal window. Close the other one. |
 | The wizard says Ollama isn't running | Open the Ollama app (it sits in the menu bar), then click *Check again*. |
 | Thoughts are short and generic, the badge under them says "offline · no AI" | No brain is set up, or it can't be reached: ⚙️ → Brain. For local thinking, Ollama must be running. ("routine · no AI" is normal: bedtime and meals are simple rules.) |
 | Thoughts take ages | The local model is too big for your Mac: ⚙️ → Brain → `ampli-gemma4:12b`, or switch to the cloud. |
@@ -164,7 +164,7 @@ In the building with the green roof your character writes code: small websites o
 
 - **The websites run in a sandbox**: their JavaScript runs, but they can't load anything from the internet, send anything anywhere, use forms or storage, or touch the town. No code runs on your Mac itself; it only runs in your browser, boxed in.
 - Every session is checked before it's saved: allowed file types only (`.html .css .js .json .svg .txt .md`), paths stay inside the project, sizes are capped (12 files, 80 000 characters per site), and what the page shows goes through the same content check as paintings.
-- **A real Git server (optional)**: with Docker Desktop installed, run this once in the Terminal, in the Ampli World folder:
+- **A real Git server (optional)**: with Docker Desktop installed, run this once in the Terminal, in the AmpliBuddy folder:
 
   ```bash
   npm run git:start
@@ -340,7 +340,7 @@ The wizard writes `data/settings.json`, which wins over `.env`; real environment
 
 ```bash
 npm run build   # builds apps/web/dist; the sim serves it
-npm start       # sim + brain via the launcher (what `Ampli World.command` runs)
+npm start       # sim + brain via the launcher (what `AmpliBuddy.command` runs)
 ```
 
 ## Before sharing beyond your machine

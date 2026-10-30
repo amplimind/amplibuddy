@@ -43,7 +43,7 @@ export function loadPersona(): Persona {
     name: meta.name ?? 'Ampli',
     species: meta.species ?? 'small fox',
     look: lookOf(meta.species ?? 'small fox', meta.look),
-    town: meta.town ?? 'Ampliville',
+    town: meta.town ?? 'Mindhaven',
   };
 }
 
