@@ -70,6 +70,7 @@ const app = createApp(sim, {
   webDist: config.webDist,
   adminToken: config.adminToken,
   sitePassword: config.sitePassword,
+  letterLimits: config.letterLimits,
 });
 if (!config.sitePassword) console.warn('[sim] SITE_PASSWORD is empty: only run this on a trusted network (VPN/office).');
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {

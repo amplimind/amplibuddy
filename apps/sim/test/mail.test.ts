@@ -67,6 +67,13 @@ test('validation and rate limits', async () => {
   assert.equal((await send({ name: 'B', text: 'other visitor' })).status, 201, 'limit is per visitor');
 });
 
+test('with a local model there are no letter limits, only the post box size', async () => {
+  const { send } = setup({ letterLimits: false });
+  const first = await send({ name: 'A', text: '1' });
+  const cookie = cookieOf(first);
+  for (let i = 2; i <= 25; i++) assert.equal((await send({ name: 'A', text: String(i) }, cookie)).status, 201, `letter ${i}`);
+});
+
 test('non-JSON posts are rejected', async () => {
   const { app } = setup();
   const res = await app.request('/api/mail', { method: 'POST', body: 'name=A&text=hi' });

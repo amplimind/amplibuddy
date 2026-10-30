@@ -321,6 +321,7 @@ The wizard writes `data/settings.json`, which wins over `.env`; real environment
 | `LLM_MAX_CALLS_PER_HOUR` | `120` | Cloud only: guards against runaway loops |
 | `ART_PER_DAY` / `CHATS_PER_DAY` | `10` / `12` | Cloud only: paintings and neighbour chats per UTC day |
 | `NOTES_PER_DAY` | unlimited | Optional cap on notice-board notes per sim day |
+| `LETTER_LIMITS` | cloud `on`, local `off` | Letters per visitor (3/hour, 10/day) and per IP (20/day). The post box still holds at most 50 unread letters |
 | `SIM_HOST` | `127.0.0.1` | Only this computer can open the town. `0.0.0.0` shares it on your network (then set `SITE_PASSWORD`; settings need `ADMIN_TOKEN` from other machines) |
 | `SIM_PORT` / `SIM_URL` | `4300` | |
 | `AMPLI_DATA_DIR` | `data/` | Database, settings and your own characters |

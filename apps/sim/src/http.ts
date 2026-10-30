@@ -83,6 +83,11 @@ export interface AppOptions {
   sitePassword?: string;
   /** Salt for hashing IPs; random per process so hashes can't be linked across restarts. */
   ipSalt?: string;
+  /**
+   * Letters per hour/day per visitor and per IP. They keep a shared town affordable and
+   * spam-free in the cloud; with a local model on your own Mac they're off. Default: on.
+   */
+  letterLimits?: boolean;
 }
 
 /** The client IP, hashed: only ever used to count letters per sender. */
@@ -258,17 +263,20 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     if (!name) return c.json({ error: 'Please tell Ampli your name.' }, 400);
     if (text === null) return c.json({ error: 'The letter is empty.' }, 400);
 
-    if (store.isMailboxPaused()) return c.json({ error: "Ampli's post box is closed for now." }, 503);
+    const who = sim.persona.name;
+    if (store.isMailboxPaused()) return c.json({ error: `${who}'s post box is closed for now.` }, 503);
     const visitor = ensureVisitorId(c);
     const ip = ipHash(c, salt);
-    if (store.countLettersByIpSince(ip, isoAgo(86_400_000)) >= LETTERS_PER_IP_PER_DAY) {
-      return c.json({ error: 'Lots of letters from here today. Try again tomorrow.' }, 429);
-    }
-    if (store.countLettersSince(visitor, isoAgo(3_600_000)) >= LETTERS_PER_HOUR) {
-      return c.json({ error: `That's ${LETTERS_PER_HOUR} letters this hour. Give Ampli a moment to catch up.` }, 429);
-    }
-    if (store.countLettersSince(visitor, isoAgo(86_400_000)) >= LETTERS_PER_DAY) {
-      return c.json({ error: `That's ${LETTERS_PER_DAY} letters today. Try again tomorrow.` }, 429);
+    if (opts.letterLimits !== false) {
+      if (store.countLettersByIpSince(ip, isoAgo(86_400_000)) >= LETTERS_PER_IP_PER_DAY) {
+        return c.json({ error: 'Lots of letters from here today. Try again tomorrow.' }, 429);
+      }
+      if (store.countLettersSince(visitor, isoAgo(3_600_000)) >= LETTERS_PER_HOUR) {
+        return c.json({ error: `That's ${LETTERS_PER_HOUR} letters this hour. Give ${who} a moment to catch up.` }, 429);
+      }
+      if (store.countLettersSince(visitor, isoAgo(86_400_000)) >= LETTERS_PER_DAY) {
+        return c.json({ error: `That's ${LETTERS_PER_DAY} letters today. Try again tomorrow.` }, 429);
+      }
     }
     if (store.countOpenLetters() >= POST_BOX_CAPACITY) {
       return c.json({ error: 'The post box is full. Try again a bit later.' }, 429);

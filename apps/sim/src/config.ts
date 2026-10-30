@@ -21,6 +21,10 @@ export const config = {
   /** Ampli rings the workshop bell for runs waiting longer than this (real minutes). 0 = never. */
   gyrosNudgeAfterMin: Number(process.env.GYROS_NUDGE_AFTER_MIN ?? 120),
   sitePassword: process.env.SITE_PASSWORD ?? '',
+  /** Letter rate limits: on in the cloud (cost, spam), off with a local model. LETTER_LIMITS=on|off overrides. */
+  letterLimits: process.env.LETTER_LIMITS
+    ? process.env.LETTER_LIMITS !== 'off'
+    : !(process.env.LLM_BASE_URL && !process.env.LLM_BASE_URL.includes('openrouter.ai')),
   /** The Code Lab: the character's websites, served sandboxed on their own port. `CODE=off` closes it. */
   code: process.env.CODE !== 'off',
   sitesPort: Number(process.env.SITES_PORT ?? 4380),
