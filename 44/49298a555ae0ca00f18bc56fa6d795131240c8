@@ -1,0 +1,61 @@
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_565eb129bd80a3 513-514,522-524
+  s_2cca0dc321ad0c::t_7a133b3810b4d4 536,538
+  s_2cca0dc321ad0c::t_18acb07e7b8afb 3-4,39,422,515-521,537
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_9285567657537d 150-152,1105-1109,1168,1171-1174,1180
+  s_2cca0dc321ad0c::t_212d1d98c824a8 149
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_212d1d98c824a8 750
+  s_2cca0dc321ad0c::t_565eb129bd80a3 26,753-761
+  s_2cca0dc321ad0c::t_9285567657537d 739
+  s_2cca0dc321ad0c::t_6b3b7e49dbb0ad 762
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_7a133b3810b4d4 1813-1816
+  s_2cca0dc321ad0c::t_9285567657537d 1817-1827
+packages/shared/src/code.ts
+  s_2cca0dc321ad0c::t_565eb129bd80a3 85-86
+  s_2cca0dc321ad0c::t_18acb07e7b8afb 63-64,87-88
+apps/sim/test/code.test.ts
+  s_2cca0dc321ad0c::t_048156e8df0c6d 166,173-179
+  s_2cca0dc321ad0c::t_1640cf4ed1d718 10,148-165,167-172,180
+  s_2cca0dc321ad0c::t_7a133b3810b4d4 140-141
+apps/web/src/Code.tsx
+  s_2cca0dc321ad0c::t_9285567657537d 42-48
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_18acb07e7b8afb 201-202,283
+  s_2cca0dc321ad0c::t_7a133b3810b4d4 198-200
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_9285567657537d 275-281
+  s_2cca0dc321ad0c::t_212d1d98c824a8 260
+  s_2cca0dc321ad0c::t_7a133b3810b4d4 282-295
+apps/sim/src/check.ts
+  s_2cca0dc321ad0c::t_8800fe57ae3777 1-88
+apps/sim/src/projects.ts
+  s_2cca0dc321ad0c::t_18acb07e7b8afb 18,28,189,264,267
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_9285567657537d 587,599-606
+  s_2cca0dc321ad0c::t_212d1d98c824a8 625-628
+  s_2cca0dc321ad0c::t_565eb129bd80a3 125-154,592,595-598,607-608
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4449298a555ae0ca00f18bc56fa6d795131240c8",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
