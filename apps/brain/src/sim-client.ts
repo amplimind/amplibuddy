@@ -1,6 +1,7 @@
 import type {
   ArtworkRequest,
   BookPart,
+  BuildRequest,
   CodeCommitRequest,
   ProjectFile,
   BrainLetter,
@@ -19,6 +20,9 @@ import type {
   ReadingRequest,
   WorldEvent,
 } from '@ampli-world/shared';
+
+/** A dry run or a commit at the Code Lab: a few seconds in a browser, two checks at most per session. */
+const CODE_CHECK_TIMEOUT_MS = 60_000;
 
 export class SimError extends Error {
   constructor(
@@ -69,12 +73,13 @@ export class SimClient {
     return this.request('GET', `/api/brain/projects/${encodeURIComponent(slug)}/files`);
   }
 
+  // Both try the page in a headless browser first, which can take a while.
   codeCheck(body: Pick<CodeCommitRequest, 'project' | 'files' | 'deleted'>): Promise<{ problems: string[] }> {
-    return this.request('POST', '/api/brain/code/check', body);
+    return this.request('POST', '/api/brain/code/check', body, CODE_CHECK_TIMEOUT_MS);
   }
 
   code(body: CodeCommitRequest): Promise<unknown> {
-    return this.request('POST', '/api/brain/code', body);
+    return this.request('POST', '/api/brain/code', body, CODE_CHECK_TIMEOUT_MS);
   }
 
   workshopNote(body: WorkshopNoteRequest): Promise<unknown> {
@@ -101,6 +106,16 @@ export class SimClient {
     return this.request('POST', '/api/brain/art', body);
   }
 
+  build(body: BuildRequest): Promise<{ id: number; held: boolean }> {
+    return this.request('POST', '/api/brain/build', body);
+  }
+
+  /** What stands on a plot now, to build on (public, like the map). */
+  async buildSvg(id: number): Promise<string | null> {
+    const res = await fetch(`${this.baseUrl}/api/build/${id}.svg`, { signal: AbortSignal.timeout(10_000) });
+    return res.ok ? res.text() : null;
+  }
+
   browse(body: BrowseRequest): Promise<unknown> {
     return this.request('POST', '/api/brain/browse', body);
   }
@@ -121,7 +136,7 @@ export class SimClient {
     return this.request('POST', `/api/brain/mail/${id}/reply`, body);
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, timeoutMs = 10_000): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -129,7 +144,7 @@ export class SimClient {
         ...(this.token ? { 'x-brain-token': this.token } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new SimError(res.status, `${method} ${path} -> ${res.status} ${await res.text()}`);
     return (await res.json()) as T;

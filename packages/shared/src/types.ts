@@ -1,6 +1,7 @@
 import type { GyrosEventKind, GyrosNudgeRun, GyrosState, GyrosStation } from './gyros.ts';
 import type { MailStats } from './mail.ts';
 import type { Look } from './species.ts';
+import type { TownState } from './building.ts';
 
 // Everything the sim, the brain and the web client agree on.
 // Time is always "sim minutes" since the world began (day 1, 00:00).
@@ -22,7 +23,9 @@ export type ActivityKind =
   | 'chat'
   | 'post_note'
   | 'visit_workshop'
-  | 'code';
+  | 'code'
+  | 'build'
+  | 'hang_painting';
 
 export interface Point {
   x: number;
@@ -52,6 +55,11 @@ export interface Plan {
   query?: string;
   /** Who to talk to, for `chat`: a neighbour's id. The chat happens at their place. */
   partnerId?: string;
+  /** Where to build, for `build`: a plot id (see PLOTS). */
+  plot?: string;
+  /** For `hang_painting`: which painting, and on which frame (see FRAMES). */
+  artId?: number;
+  frame?: string;
 }
 
 export interface Activity extends Plan {
@@ -116,6 +124,8 @@ export interface WorldSnapshot {
   gyros: GyrosState | null;
   /** Ampli's latest question if nobody has answered it yet (shown as ❓ and as an answer card). */
   openQuestion: { id: number; text: string; simTime: number } | null;
+  /** Bumped whenever something is built or hung, so clients fetch /api/town again. */
+  townVersion: number;
 }
 
 export type ThoughtSource = 'llm' | 'routine' | 'offline';
@@ -139,7 +149,15 @@ export type EventBody =
   | {
       type: 'activity_started';
       /** `with`: the chat partner's name. */
-      data: { kind: ActivityKind; place: PlaceId; bookTitle?: string; query?: string; with?: string };
+      data: {
+        kind: ActivityKind;
+        place: PlaceId;
+        bookTitle?: string;
+        query?: string;
+        with?: string;
+        /** Building or hanging a painting: where exactly ("by the pond"). */
+        where?: string;
+      };
     }
   | { type: 'activity_finished'; data: { kind: ActivityKind; place: PlaceId } }
   | { type: 'walk_started'; data: { from: PlaceId; to: PlaceId } }
@@ -183,6 +201,16 @@ export type EventBody =
   | { type: 'gyros_nudge'; data: { text: string; runs: GyrosNudgeRun[]; llm?: LlmMeta } }
   /** The town or the character got a new name in the settings. */
   | { type: 'renamed'; data: { what: 'town' | 'character'; from: string; to: string } }
+  /**
+   * Something the character built on a plot. `replaced`: what stood there before. Held builds
+   * carry no name or description, only `held`, so the character knows nothing went up.
+   */
+  | {
+      type: 'built';
+      data: { plot: string; where: string; buildId?: number; name?: string; description?: string; replaced?: string; held?: boolean; llm?: LlmMeta };
+    }
+  /** A painting went up on a frame. `replaced`: the title of the one that hung there before. */
+  | { type: 'painting_hung'; data: { frame: string; where: string; artId: number; title: string; replaced?: string } }
   /** One of the character's websites stopped with an error in someone's browser. */
   | { type: 'site_error'; data: { project: string; name: string; problem: string } }
   /**
@@ -294,6 +322,12 @@ export interface BrainContext {
   notesToday: number;
   /** Each neighbour's own notes (about Ampli and the town), keyed by neighbour id. */
   neighborNotes: Record<string, string[]>;
+  /** What stands on the plots and hangs on the frames, and the paintings it could hang. */
+  town: TownState;
+  paintings: { id: number; title: string }[];
+  /** Builds since 00:00 UTC (any status), and paintings hung since then, for the daily caps. */
+  buildsToday: number;
+  hangsToday: number;
 }
 
 export interface DecisionRequest {

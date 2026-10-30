@@ -13,7 +13,11 @@ import {
   MAX_ART_TITLE_CHARS,
   MAX_CAPTION_CHARS,
   MAX_DOODLE_BYTES,
+  MAX_BUILD_DESCRIPTION_CHARS,
+  MAX_BUILD_NAME_CHARS,
   REPORTS_TO_HOLD,
+  frameById,
+  plotById,
   cleanSvg,
   readingProgress,
   splitIntoParts,
@@ -33,6 +37,7 @@ import {
   type LlmMeta,
   type Plan,
   type Thought,
+  type TownState,
   type WebSource,
 } from '@ampli-world/shared';
 import { withoutText, type ShelfBook } from './library.ts';
@@ -89,6 +94,8 @@ export interface AppOptions {
    * spam-free in the cloud; with a local model on your own Mac they're off. Default: on.
    */
   letterLimits?: boolean;
+  /** May the character build in town? Off: no new builds, and the built ones aren't shown. Default: on. */
+  building?: boolean;
 }
 
 /** The client IP, hashed: only ever used to count letters per sender. */
@@ -367,6 +374,20 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return svgResponse(repairSvg(art.svg));
   });
 
+  // --- What the character built and hung in town (public) ---
+
+  const building = opts.building !== false;
+  const town = (): TownState => ({ builds: building ? store.currentBuilds() : [], frames: store.hungPaintings() });
+
+  app.get('/api/town', (c) => c.json(town()));
+
+  app.get('/api/build/:file', (c) => {
+    const match = /^(\d+)\.svg$/.exec(c.req.param('file'));
+    const build = match ? store.buildSvg(Number(match[1])) : null;
+    if (!building || !build || build.status !== 'shown') return c.json({ error: 'not found' }, 404);
+    return svgResponse(repairSvg(build.svg));
+  });
+
   /** Anyone can report a public letter once; enough reports take it off the board until an admin decides. */
   app.post('/api/mail/:id/report', (c) => {
     if (!c.req.header('content-type')?.includes('application/json')) return c.json({ error: 'json only' }, 415);
@@ -440,6 +461,10 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       // Per sim day: this limit keeps the board from flooding, it isn't about cost.
       notesToday: store.countEventsSinceSim('note_posted', Math.floor(engine.simTime / MINUTES_PER_DAY) * MINUTES_PER_DAY),
       neighborNotes: Object.fromEntries(sim.neighbors.map((n) => [n.id, store.neighborNotes(n.id)])),
+      town: town(),
+      paintings: store.gallery(20).map((a) => ({ id: a.id, title: a.title })),
+      buildsToday: store.countBuildsToday(),
+      hangsToday: store.countEventsToday('painting_hung'),
     };
     return c.json(context);
   });
@@ -516,7 +541,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     if (!sim.projects) return c.json({ error: 'the Code Lab is closed' }, 404);
     const body = (await c.req.json().catch(() => null)) as CodeCommitRequest | null;
     if (!isRecord(body) || typeof body.project !== 'string') return c.json({ error: 'bad request' }, 400);
-    return c.json({ problems: sim.projects.preview(body) });
+    return c.json({ problems: await sim.projects.preview(body) });
   });
 
   /** The end of a coding session: checked, saved, committed, and online at once. */
@@ -603,8 +628,23 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     }
     const query = kind === 'browse' ? cleanText(body.plan.query, MAX_QUERY_CHARS) : null;
     if (kind === 'browse' && !query) return c.json({ error: 'browse needs a query' }, 400);
-    const plan: Plan =
-      kind === 'read' ? { kind, bookId: bookId as string } : query ? { kind, query } : { kind };
+    const plan: Plan = { kind };
+    if (kind === 'read') plan.bookId = bookId as string;
+    if (query) plan.query = query;
+    if (kind === 'chat' && typeof body.plan.partnerId === 'string') plan.partnerId = body.plan.partnerId;
+    if (kind === 'build' && !building) return c.json({ error: 'building is switched off' }, 403);
+    if (kind === 'build') {
+      const plot = plotById(typeof body.plan.plot === 'string' ? body.plan.plot : undefined);
+      if (!plot) return c.json({ error: 'unknown plot' }, 400);
+      plan.plot = plot.id;
+    }
+    if (kind === 'hang_painting') {
+      const frame = frameById(typeof body.plan.frame === 'string' ? body.plan.frame : undefined);
+      const art = typeof body.plan.artId === 'number' ? store.artwork(body.plan.artId) : null;
+      if (!frame || !art || art.status !== 'shown') return c.json({ error: 'unknown frame or painting' }, 400);
+      plan.frame = frame.id;
+      plan.artId = art.id;
+    }
 
     if (!engine.idle) return c.json({ error: 'busy' }, 409);
     sim.log({ type: 'thought', data: thought });
@@ -766,6 +806,40 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json(art);
   });
 
+  app.post('/api/brain/build', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (!isRecord(body)) return c.json({ error: 'bad request' }, 400);
+    const metas = (Array.isArray(body.llm) ? body.llm : []).map(parseLlm).filter((m): m is LlmMeta => !!m);
+    for (const meta of metas) store.recordLlmCall('build', meta);
+    if (!building) return c.json({ error: 'building is switched off' }, 403);
+    const plot = plotById(typeof body.plot === 'string' ? body.plot : undefined);
+    const name = cleanText(body.name, MAX_BUILD_NAME_CHARS)?.replace(/\s+/g, ' ');
+    const description = cleanText(body.description, MAX_BUILD_DESCRIPTION_CHARS)?.replace(/\s+/g, ' ');
+    const svg = cleanSvg(body.svg);
+    if (!plot || !name || !description || !svg) return c.json({ error: 'unusable build' }, 400);
+
+    const held = body.held === true;
+    const before = store.currentBuilds().find((b) => b.plot === plot.id);
+    const id = store.createBuild({
+      plot: plot.id,
+      simTime: engine.simTime,
+      name,
+      description,
+      svg,
+      status: held ? 'held' : 'shown',
+      ...(held ? { note: shortString(body.note, MAX_NOTE_CHARS) ?? 'held by the check' } : {}),
+      ...(metas[0] ? { llm: metas[0] } : {}),
+    });
+    const llm = metas[0] ? { llm: metas[0] } : {};
+    sim.log({
+      type: 'built',
+      data: held
+        ? { plot: plot.id, where: plot.where, held: true, ...llm }
+        : { plot: plot.id, where: plot.where, buildId: id, name, description, ...(before ? { replaced: before.name } : {}), ...llm },
+    });
+    return c.json({ id, held });
+  });
+
   app.post('/api/brain/diary', async (c) => {
     const body: unknown = await c.req.json().catch(() => null);
     if (!isRecord(body)) return c.json({ error: 'bad request' }, 400);
@@ -859,6 +933,24 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       sim.log({ type: 'artwork_created', data: { artworkId: id, title: art.title, caption: art.caption } });
     }
     return c.json(store.artwork(id));
+  });
+
+  app.get('/api/admin/builds', (c) => c.json(store.adminBuilds()));
+
+  app.get('/api/admin/build/:file', (c) => {
+    const match = /^(\d+)\.svg$/.exec(c.req.param('file'));
+    const build = match ? store.buildSvg(Number(match[1])) : null;
+    return build ? svgResponse(repairSvg(build.svg)) : c.json({ error: 'not found' }, 404);
+  });
+
+  /** Puts a build up (it replaces what stands on its plot) or takes it down, leaving the plot empty. */
+  app.post('/api/admin/builds/:id/:action', (c) => {
+    const id = Number(c.req.param('id'));
+    const action = c.req.param('action');
+    const build = store.build(id);
+    if (!build || (action !== 'approve' && action !== 'hide')) return c.json({ error: 'not found' }, 404);
+    store.setBuildStatus(id, action === 'approve' ? 'shown' : 'hidden');
+    return c.json(store.build(id));
   });
 
   app.post('/api/admin/mailbox', async (c) => {

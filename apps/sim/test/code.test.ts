@@ -9,7 +9,8 @@ import type { CodeProject, WorldEvent } from '@ampli-world/shared';
 import { createApp } from '../src/http.ts';
 import { checkProject } from '../src/check.ts';
 import { CommitError, GitServer, Projects } from '../src/projects.ts';
-import { SITE_CSP, createSitesApp, reportedProblem } from '../src/sites.ts';
+import { SITE_CSP, SitePreviews, createSitesApp, reportedProblem } from '../src/sites.ts';
+import { BrowserCheck, findBrowser } from '../src/browser.ts';
 import { Sim } from '../src/sim.ts';
 import { Store } from '../src/store.ts';
 
@@ -155,7 +156,7 @@ test('code: when a page breaks in a browser, the character hears the file, line 
   await report(error);
   assert.equal(heard.length, 2);
   assert.equal(
-    reportedProblem('pond-oxygen', { m: 'Uncaught\u0000 boom', f: 'http://127.0.0.1:4380/elsewhere/x.js', l: '3' }),
+    reportedProblem('/pond-oxygen/', { m: 'Uncaught\u0000 boom', f: 'http://127.0.0.1:4380/elsewhere/x.js', l: '3' }),
     'boom (it stopped there when someone opened the page)',
   );
 });
@@ -222,8 +223,50 @@ test('code: after each commit the Code Lab says what is wrong, without running a
 test('code: a dry run says what would be wrong, without saving anything', async () => {
   const p = projects();
   await p.commit({ project: 'Life', files: [{ path: 'index.html', content: '<script src="cells.js"></script><script src="main.js"></script>' }], message: 'Start' }, 1);
-  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'const cells = [];' }] }), ["index.html links to main.js, which isn't in the project"]);
-  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go(' }] }).length, 1, 'a syntax error in main.js');
-  assert.deepEqual(p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go()' }] }), []);
+  assert.deepEqual(await p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'const cells = [];' }] }), ["index.html links to main.js, which isn't in the project"]);
+  assert.deepEqual((await p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go(' }] })).length, 1, 'a syntax error in main.js');
+  assert.deepEqual(await p.preview({ project: 'life', files: [{ path: 'cells.js', content: 'x' }, { path: 'main.js', content: 'go()' }] }), []);
   assert.deepEqual(p.files('life').map((f) => f.path), ['index.html'], 'nothing was saved');
+});
+
+test('code: a session not committed yet is served for a moment, and its errors collected', async () => {
+  const p = projects();
+  const previews = new SitePreviews();
+  const sites = createSitesApp(p, () => 'Ampli', undefined, previews);
+  const id = previews.add([{ path: 'index.html', content: '<!doctype html><head></head><script src="js/a.js"></script>' }, { path: 'js/a.js', content: 'go()' }]);
+  const page = await (await sites.request(`/__preview/${id}/`)).text();
+  assert.match(page, new RegExp(`new Image\\(\\)\\.src="/__errors/__preview/${id}"`));
+  assert.equal(await (await sites.request(`/__preview/${id}/js/a.js`)).text(), 'go()');
+  assert.equal((await sites.request(`/__preview/${'0'.repeat(32)}/`)).status, 404);
+  const report = (m: string) => sites.request(`/__errors/__preview/${id}?${new URLSearchParams({ m, f: `http://127.0.0.1:4380/__preview/${id}/js/a.js`, l: '1' })}`);
+  await report('Uncaught ReferenceError: go is not defined');
+  await report('Uncaught ReferenceError: go is not defined');
+  assert.deepEqual(previews.close(id), ['js/a.js, line 1: ReferenceError: go is not defined (it stopped there when the Code Lab opened the page)']);
+  assert.equal((await sites.request(`/__preview/${id}/`)).status, 404, 'gone after the check');
+});
+
+const browser = findBrowser(process.env.CODE_BROWSER);
+
+test('code: the Code Lab tries each page in a real browser, before and after the commit', { skip: !browser && 'no Chromium-based browser installed', timeout: 60_000 }, async () => {
+  const p = projects();
+  const previews = new SitePreviews();
+  const sites = createSitesApp(p, () => 'Ampli', undefined, previews);
+  const { serve } = await import('@hono/node-server');
+  const server = serve({ fetch: sites.fetch, port: 0, hostname: '127.0.0.1' });
+  await new Promise((r) => server.once('listening', r));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  p.browserCheck = (files) => new BrowserCheck(browser!, previews, origin).run(files);
+  try {
+    // Drawing before the state exists: compiles fine, breaks when it runs.
+    const broken = '<!DOCTYPE html>\n<html>\n<head><title>Pond</title></head>\n<body>\n<script>\nlet sim = null;\nfunction draw() { return sim.temp; }\ndraw();\n</script>\n</body>\n</html>';
+    assert.deepEqual(await p.preview({ project: 'Pond', files: [{ path: 'index.html', content: broken }] }), [
+      "index.html, line 7: TypeError: Cannot read properties of null (reading 'temp') (it stopped there when the Code Lab opened the page)",
+    ]);
+    const later = '<!DOCTYPE html><script>setTimeout(() => { missing(); }, 1500);</script>';
+    const done = await p.commit({ project: 'Pond', files: [{ path: 'index.html', content: later }], message: 'Start' }, 1);
+    assert.deepEqual(done.problems, ['index.html, line 1: ReferenceError: missing is not defined (it stopped there when the Code Lab opened the page)'], 'errors a few seconds in count too');
+    assert.deepEqual(await p.preview({ project: 'pond', files: [{ path: 'index.html', content: '<!DOCTYPE html><p>fine</p>' }] }), []);
+  } finally {
+    server.close();
+  }
 });

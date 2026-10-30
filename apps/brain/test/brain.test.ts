@@ -62,6 +62,7 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
       latestArtId: null,
       openQuestion: null,
       gyros: null,
+      townVersion: 0,
       neighbors: [{ id: 'hedda', name: 'Hedda', species: 'hedgehog', look: 'hedgehog', place: 'cafe' }],
     },
     idle: true,
@@ -83,6 +84,10 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     chatsToday: 0,
     notesToday: 0,
     neighborNotes: { hedda: [] },
+    town: { builds: [], frames: [] },
+    paintings: [],
+    buildsToday: 0,
+    hangsToday: 0,
   };
 }
 
@@ -126,6 +131,45 @@ test('toDecision validates the model output', () => {
   assert.throws(() => toDecision({ activity: 'sleep', thought: 'zz' }, meta, ctx(NOON), allowed));
   assert.throws(() => toDecision({ activity: 'fly', thought: 'whee' }, meta, ctx(NOON), allowed));
   assert.throws(() => toDecision({ activity: 'stroll' }, meta, ctx(NOON), allowed));
+});
+
+test('building and hanging paintings: offered only when allowed, and the plan says where', () => {
+  assert.ok(!availableActivities(NOON).includes('build'), 'never without the LLM (offline choices)');
+  assert.ok(!availableActivities(NOON).includes('hang_painting'));
+  const allowed = availableActivities(NOON, { canBuild: true, canHang: true });
+  assert.ok(allowed.includes('build') && allowed.includes('hang_painting'));
+
+  const c = ctx(NOON);
+  c.town = { builds: [{ id: 1, plot: 'garden', name: 'Birdhouse', description: 'For the robins.', simTime: 0 }], frames: [] };
+  c.paintings = [
+    { id: 7, title: 'Ice' },
+    { id: 3, title: 'Fog' },
+  ];
+  assert.deepEqual(toDecision({ activity: 'build', thought: 'a bench', plot: 'pond' }, meta, c, allowed).plan, { kind: 'build', plot: 'pond' });
+  assert.deepEqual(
+    toDecision({ activity: 'build', thought: 'something', plot: 'moon' }, meta, c, allowed).plan,
+    { kind: 'build', plot: 'meadow-west' },
+    'an unknown plot becomes the first empty one',
+  );
+  assert.deepEqual(toDecision({ activity: 'hang_painting', thought: 'up it goes', painting: '3', frame: 'cafe' }, meta, c, allowed).plan, {
+    kind: 'hang_painting',
+    artId: 3,
+    frame: 'cafe',
+  });
+  assert.deepEqual(toDecision({ activity: 'hang_painting', thought: 'hm', painting: 'x' }, meta, c, allowed).plan, {
+    kind: 'hang_painting',
+    artId: 7,
+    frame: 'plaza-1',
+  });
+
+  const tool = decideTool(allowed, [], [], [7, 3]);
+  const props = tool.parameters.properties as Record<string, { enum?: string[] }>;
+  assert.ok(props.plot?.enum?.includes('pond'));
+  assert.deepEqual(props.painting?.enum, ['7', '3']);
+  assert.ok(props.frame?.enum?.includes('plaza-1'));
+  const prompt = decideUser(c, allowed);
+  assert.match(prompt, /garden \(in the garden in front of your cottage, your "Birdhouse" stands there\)/);
+  assert.match(prompt, /7: "Ice"; 3: "Fog"/);
 });
 
 test('extractToolArgs reads tool calls and falls back to JSON in content', () => {

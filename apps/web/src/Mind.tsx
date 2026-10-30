@@ -46,6 +46,7 @@ function Stats({ stats }: { stats: MindView['stats'] }) {
     ['🔎', stats.searches, 'searches'],
     ['🎨', stats.paintings, 'paintings'],
     ['⌨️', stats.websites, 'websites'],
+    ['🔨', stats.builds, 'built in town'],
     ['✉️', stats.letters, 'letters'],
     ['💬', stats.chats, 'chats'],
   ];

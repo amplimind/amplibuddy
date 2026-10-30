@@ -31,6 +31,8 @@ export interface Settings {
   /** Sim minutes per real second. */
   speed?: number;
   gyros?: { url?: string; uiUrl?: string };
+  /** May the character build things in town? Off hides what it built, too. */
+  building?: boolean;
   /** The local Git server (Forgejo) the Code Lab mirrors to; set up by `npm run git:start`. */
   git?: { url: string; user: string; token: string };
   searxngUrl?: string;
@@ -70,6 +72,7 @@ export function settingsEnv(s: Settings): Record<string, string> {
     env.GYROS_UI_URL = s.gyros.uiUrl ?? '';
   }
   if (s.searxngUrl !== undefined) env.SEARXNG_URL = s.searxngUrl;
+  if (s.building !== undefined) env.BUILD = s.building ? 'on' : 'off';
   if (s.git) {
     env.GIT_URL = s.git.url;
     env.GIT_USER = s.git.user;

@@ -10,3 +10,4 @@ export * from './library.ts';
 export * from './code.ts';
 export * from './text.ts';
 export * from './mindview.ts';
+export * from './building.ts';

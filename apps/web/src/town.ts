@@ -4,11 +4,18 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   PLACES,
+  WALK_TILES_PER_SECOND,
+  frameById,
   hourOf,
   neighborPresent,
+  pathLength,
+  plotById,
   pointAlong,
+  standPoint,
   GYROS_STATIONS,
   type ActivityKind,
+  type TownState,
+  type WorldSnapshot,
   type GyrosRun,
   type GyrosState,
   type GyrosStation,
@@ -115,6 +122,8 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   post_note: '📌',
   visit_workshop: '⚙️',
   code: '⌨️',
+  build: '🔨',
+  hang_painting: '🖼️',
 };
 
 function px(tile: number): number {
@@ -780,6 +789,10 @@ export interface FrameState {
   reveal: Partial<Record<PlaceId, number>>;
   /** Pointer position in tiles, for peeking into buildings. */
   mouse: Point | null;
+  /** What the character built and hung, for the snapshot's townVersion (fetched once per version). */
+  town?: { version: number; data: TownState | null };
+  /** Built things and hung paintings, loaded once per URL. */
+  images?: Map<string, HTMLImageElement>;
 }
 
 const REVEAL_SPEED = 5;
@@ -814,13 +827,124 @@ export interface View {
   ty: number;
 }
 
-/** Ampli's current position in tiles, interpolated along a walk. */
+/**
+ * Where Ampli is, in tiles: along a walk, or, while building or hanging a painting, on the
+ * last few steps from the place's spot to the plot or frame and back again at the end. Those
+ * steps are only drawn; to the sim, Ampli is at the place.
+ */
+function agentPoint(snapshot: WorldSnapshot, simNow: number): Point {
+  const { agent } = snapshot;
+  if (agent.walk) return pointAlong(agent.walk.path, (simNow - agent.walk.startedAt) / (agent.walk.endsAt - agent.walk.startedAt));
+  const a = agent.activity;
+  const target = a && (a.kind === 'build' || a.kind === 'hang_painting') ? standPoint(a) : null;
+  if (!a || !target) return agent.position;
+  const from = agent.position;
+  const place = PLACES[a.place];
+  // Out of a building through its door; across open ground straight there.
+  const path =
+    BUILDINGS[a.place] && !insideArea(place, target)
+      ? [from, place.door, { x: target.x, y: place.door.y }, target]
+      : [from, { x: target.x, y: from.y }, target];
+  const legMinutes = Math.max(0.01, (pathLength(path) / WALK_TILES_PER_SECOND) * snapshot.minutesPerSecond);
+  const out = (simNow - a.startedAt) / legMinutes;
+  const back = (a.endsAt - simNow) / legMinutes;
+  if (out < 1) return pointAlong(path, out);
+  if (back < 1) return pointAlong(path, back);
+  return target;
+}
+
+/** Ampli's current position in tiles (see agentPoint). */
 export function foxTile(live: LiveSnapshot, now: number): Point {
   const { snapshot, receivedAt } = live;
-  const { agent } = snapshot;
-  if (!agent.walk) return agent.position;
-  const simNow = snapshot.simTime + ((now - receivedAt) / 1000) * snapshot.minutesPerSecond;
-  return pointAlong(agent.walk.path, (simNow - agent.walk.startedAt) / (agent.walk.endsAt - agent.walk.startedAt));
+  return agentPoint(snapshot, snapshot.simTime + ((now - receivedAt) / 1000) * snapshot.minutesPerSecond);
+}
+
+// --- What Ampli built and hung -------------------------------------------------------------
+
+function townOf(state: FrameState, version: number): TownState | null {
+  if (state.town?.version !== version) {
+    // Keep showing the old town until the new one has arrived.
+    const entry = { version, data: state.town?.data ?? null };
+    state.town = entry;
+    fetch('/api/town')
+      .then((r) => (r.ok ? (r.json() as Promise<TownState>) : Promise.reject(new Error(String(r.status)))))
+      .then((data) => {
+        entry.data = data;
+      })
+      .catch(() => {
+        // Try again in a while.
+        setTimeout(() => {
+          if (state.town === entry) state.town = { version: -1, data: entry.data };
+        }, 5000);
+      });
+  }
+  return state.town.data;
+}
+
+function imageOf(state: FrameState, src: string): HTMLImageElement | null {
+  state.images ??= new Map();
+  let img = state.images.get(src);
+  if (!img) {
+    img = new Image();
+    img.src = src;
+    state.images.set(src, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/** Built things stand on their plot with a soft shadow under them. */
+function drawBuilds(ctx: CanvasRenderingContext2D, state: FrameState, town: TownState) {
+  for (const build of town.builds) {
+    const plot = plotById(build.plot);
+    if (!plot) continue;
+    const { x, y, w, h } = plot.area;
+    ctx.fillStyle = 'rgba(59, 49, 39, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(px(x + w / 2), px(y + h - 0.1), px(w * 0.36), px(0.2), 0, 0, Math.PI * 2);
+    ctx.fill();
+    const img = imageOf(state, `/api/build/${build.id}.svg`);
+    if (img) ctx.drawImage(img, px(x), px(y), px(w), px(h));
+  }
+}
+
+/** Paintings on their frames: easels out on the plaza, plain frames on walls inside. */
+function drawFrames(ctx: CanvasRenderingContext2D, state: FrameState, town: TownState, outdoor: boolean) {
+  for (const hung of town.frames) {
+    const frame = frameById(hung.frame);
+    if (!frame || frame.outdoor !== outdoor) continue;
+    const r = frame.rect;
+    if (outdoor) {
+      ctx.strokeStyle = '#7a5235';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(px(r.x + 0.15), px(r.y + r.h + 0.55));
+      ctx.lineTo(px(r.x + r.w / 2), px(r.y - 0.15));
+      ctx.lineTo(px(r.x + r.w - 0.15), px(r.y + r.h + 0.55));
+      ctx.stroke();
+    }
+    rect(ctx, '#7a5235', r.x - 0.07, r.y - 0.07, r.w + 0.14, r.h + 0.14, 2);
+    const img = imageOf(state, `/api/art/${hung.artId}.svg?v=${ART_VERSION}`);
+    if (img) ctx.drawImage(img, px(r.x), px(r.y), px(r.w), px(r.h));
+    else rect(ctx, '#fffaf2', r.x, r.y, r.w, r.h, 1);
+  }
+}
+
+const inBox = (p: Point, b: { x: number; y: number; w: number; h: number }) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
+
+/** Name and plaque of what's under the pointer (a build, or a painting you can see), if anything. */
+function hoverLines(state: FrameState, town: TownState | null): { title: string; body: string } | null {
+  const m = state.mouse;
+  if (!m || !town) return null;
+  for (const build of town.builds) {
+    const plot = plotById(build.plot);
+    if (plot && inBox(m, plot.area)) return { title: build.name, body: build.description };
+  }
+  for (const hung of town.frames) {
+    const frame = frameById(hung.frame);
+    if (!frame || !inBox(m, frame.rect)) continue;
+    if (frame.outdoor || (state.reveal[frame.place] ?? 0) > 0.5) return { title: `“${hung.title}”`, body: 'A painting from the studio' };
+  }
+  return null;
 }
 
 /** One small robot per active GyrOS run, at its station; orange with "!" when it waits for a human. */
@@ -921,7 +1045,11 @@ function drawRobotTooltip(ctx: CanvasRenderingContext2D, run: GyrosRun, x: numbe
   const name = run.ticketKey ? (run.workflow === 'carplan' ? run.ticketKey : `${run.ticketKey} · ${run.workflow}`) : run.workflow;
   const step = run.pendingLabel ? `Waiting for: ${run.pendingLabel}` : run.stepLabel;
   const title = run.title && run.title.length > 52 ? `${run.title.slice(0, 51)}…` : run.title;
-  const lines = [name, step, ...(title ? [title] : [])];
+  drawTooltip(ctx, [name, step, ...(title ? [title] : [])], x, y, viewWidth, run.pending ? '#f2a33a' : '#d8ccb8');
+}
+
+/** A small card in screen pixels: the first line bold. */
+function drawTooltip(ctx: CanvasRenderingContext2D, lines: string[], x: number, y: number, viewWidth: number, border = '#d8ccb8') {
   const font = (weight: number) => `${weight} 12px ui-rounded, system-ui, sans-serif`;
   let w = 0;
   lines.forEach((line, i) => {
@@ -932,7 +1060,7 @@ function drawRobotTooltip(ctx: CanvasRenderingContext2D, run: GyrosRun, x: numbe
   const left = Math.min(Math.max(x - w / 2, 6), viewWidth - w - 6);
   const top = y - 18 - h < 6 ? y + 18 : y - 18 - h;
   ctx.fillStyle = 'rgba(255, 252, 245, 0.97)';
-  ctx.strokeStyle = run.pending ? '#f2a33a' : '#d8ccb8';
+  ctx.strokeStyle = border;
   ctx.lineWidth = 1;
   roundRect(ctx, left, top, w, h, 8);
   ctx.fill();
@@ -987,11 +1115,7 @@ export function drawFrame(
   const { agent } = snapshot;
   const simNow = snapshot.simTime + ((now - receivedAt) / 1000) * snapshot.minutesPerSecond;
 
-  let pos = agent.position;
-  if (agent.walk) {
-    const t = (simNow - agent.walk.startedAt) / (agent.walk.endsAt - agent.walk.startedAt);
-    pos = pointAlong(agent.walk.path, t);
-  }
+  const pos = agentPoint(snapshot, simNow);
   const x = px(pos.x + 0.5);
   const y = px(pos.y + 0.5);
   if (Math.abs(x - state.lastX) > 0.05) state.facing = x > state.lastX ? 1 : -1;
@@ -999,6 +1123,8 @@ export function drawFrame(
 
   updateReveal(state, { x: pos.x + 0.5, y: pos.y + 0.5 }, now);
   drawEasel(ctx, state, snapshot.latestArtId);
+  const town = townOf(state, snapshot.townVersion ?? 0);
+  if (town) drawFrames(ctx, state, town, false);
   const robot = drawWorkshopRuns(ctx, snapshot.gyros, now, state.mouse);
   // Neighbours stand at their place during opening hours (under the roof, so visible when you look inside).
   const residents = residentPositions(snapshot.neighbors, simNow);
@@ -1006,6 +1132,10 @@ export function drawFrame(
     const at = residents.get(n.id);
     if (at) drawCritter(ctx, n.look, at.x, at.y, { facing: -1, bob: Math.sin(now / 700 + i) * 0.6 });
   });
+  if (town) {
+    drawBuilds(ctx, state, town);
+    drawFrames(ctx, state, town, true);
+  }
   drawRoofsAndLabels(ctx, state.reveal);
   drawWorkshopBell(ctx, snapshot.gyros, now);
 
@@ -1066,9 +1196,14 @@ export function drawFrame(
     }
   }
 
-  // The robot tooltip is drawn in screen pixels, so it stays readable at any zoom.
+  // Tooltips are drawn in screen pixels, so they stay readable at any zoom.
+  const hover = robot ? null : hoverLines(state, town);
+  if (robot || (hover && state.mouse)) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (robot) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawRobotTooltip(ctx, robot.run, robot.x * view.scale + view.tx, robot.y * view.scale + view.ty, ctx.canvas.width / dpr);
+  } else if (hover && state.mouse) {
+    ctx.font = '500 12px ui-rounded, system-ui, sans-serif';
+    const body = wrap(ctx, hover.body, 240, 4);
+    drawTooltip(ctx, [hover.title, ...body], px(state.mouse.x) * view.scale + view.tx, px(state.mouse.y) * view.scale + view.ty, ctx.canvas.width / dpr);
   }
 }

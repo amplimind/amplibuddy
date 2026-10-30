@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
-import { cleanProjectPath } from '@ampli-world/shared';
+import { cleanProjectPath, type ProjectFile } from '@ampli-world/shared';
+import { MAX_PROBLEMS } from './check.ts';
 import type { Projects } from './projects.ts';
 
 // The character's websites, on their own port, each page in a sandbox. The code is
@@ -61,7 +62,12 @@ function withReporter(html: string, reportUrl: string): string {
 }
 
 /** "index.html, line 190: ReferenceError: …", from what the browser sent. Null when there's nothing to say. */
-export function reportedProblem(slug: string, report: { m?: string; f?: string; l?: string }): string | null {
+export function reportedProblem(
+  /** Where the site's files are, e.g. "/pond-clock/". */
+  base: string,
+  report: { m?: string; f?: string; l?: string },
+  who = 'someone',
+): string | null {
   const message = (report.m ?? '')
     .replace(/[\u0000-\u001f\u007f]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -72,7 +78,7 @@ export function reportedProblem(slug: string, report: { m?: string; f?: string; 
   let file: string | null = null;
   try {
     const path = decodeURIComponent(new URL(report.f ?? '').pathname);
-    const rest = path.startsWith(`/${slug}/`) ? path.slice(slug.length + 2) : null;
+    const rest = path.startsWith(base) ? path.slice(base.length) : null;
     if (rest !== null) file = cleanProjectPath(rest === '' || rest.endsWith('/') ? `${rest}index.html` : rest);
   } catch {
     // No file, or not one of this site's.
@@ -80,7 +86,32 @@ export function reportedProblem(slug: string, report: { m?: string; f?: string; 
   const line = Math.floor(Number(report.l));
   const where = file ? `${file}${line > 0 ? `, line ${line}` : ''}: ` : '';
   const what = message === 'Script error.' ? 'a script stopped with an error (no details)' : message;
-  return `${where}${what} (it stopped there when someone opened the page)`;
+  return `${where}${what} (it stopped there when ${who} opened the page)`;
+}
+
+/**
+ * Coding sessions not committed yet, served for a moment under /__preview/<id>/ so the Code
+ * Lab's browser can try them. The id is random and gone after the check.
+ */
+export class SitePreviews {
+  private readonly open = new Map<string, { files: Map<string, string>; problems: string[] }>();
+
+  add(files: ProjectFile[]): string {
+    const id = randomBytes(16).toString('hex');
+    this.open.set(id, { files: new Map(files.map((f) => [f.path, f.content])), problems: [] });
+    return id;
+  }
+
+  get(id: string) {
+    return this.open.get(id);
+  }
+
+  /** Ends a preview; returns what broke while it was open. */
+  close(id: string): string[] {
+    const problems = this.open.get(id)?.problems ?? [];
+    this.open.delete(id);
+    return problems;
+  }
 }
 
 export function createSitesApp(
@@ -88,6 +119,7 @@ export function createSitesApp(
   ownerName: () => string,
   /** A page broke in someone's browser, and it's news (not reported before). */
   onError?: (project: { slug: string; name: string }, problem: string) => void,
+  previews?: SitePreviews,
 ): Hono {
   const app = new Hono();
   // Only pages this server handed out can report: the key is tied to the site and its version.
@@ -116,9 +148,16 @@ export function createSitesApp(
 
   app.get('/__errors/:slug/:key', (c) => {
     const slug = c.req.param('slug');
+    const key = c.req.param('key');
+    if (slug === '__preview') {
+      const preview = previews?.get(key);
+      const problem = preview && reportedProblem(`/__preview/${key}/`, c.req.query(), 'the Code Lab');
+      if (preview && problem && !preview.problems.includes(problem) && preview.problems.length < MAX_PROBLEMS) preview.problems.push(problem);
+      return c.body(null, 204, SECURITY_HEADERS);
+    }
     const version = projects.version(slug);
-    if (version && sameKey(c.req.param('key'), reportKey(slug, version))) {
-      const problem = reportedProblem(slug, c.req.query());
+    if (version && sameKey(key, reportKey(slug, version))) {
+      const problem = reportedProblem(`/${slug}/`, c.req.query());
       if (problem && projects.reportError(slug, problem)) onError?.({ slug, name: projects.project(slug)?.name ?? slug }, problem);
     }
     return c.body(null, 204, SECURITY_HEADERS);
@@ -126,29 +165,37 @@ export function createSitesApp(
 
   app.get('*', (c) => {
     const notFound = () => c.body('Not found', 404, { ...SECURITY_HEADERS, 'content-type': TYPES.txt! });
+    const serve = (rest: string[], read: (path: string) => string | null, reportUrl: string | null) => {
+      const path = rest.join('/') || 'index.html';
+      const clean = cleanProjectPath(path.endsWith('/') ? `${path}index.html` : path);
+      const content = clean ? read(clean) : null;
+      if (!clean || content === null) return notFound();
+      const ext = clean.slice(clean.lastIndexOf('.') + 1).toLowerCase();
+      return c.body(ext === 'html' && reportUrl ? withReporter(content, reportUrl) : content, 200, {
+        ...SECURITY_HEADERS,
+        'content-type': TYPES[ext] ?? TYPES.txt!,
+        // Lets the page see its own scripts' errors (see withReporter); the files are public anyway.
+        ...(ext === 'js' ? { 'access-control-allow-origin': '*' } : {}),
+      });
+    };
     let segments: string[];
     try {
       segments = c.req.path.split('/').slice(1).map(decodeURIComponent);
     } catch {
       return notFound();
     }
+    if (segments[0] === '__preview') {
+      const [, id = '', ...rest] = segments;
+      const preview = previews?.get(id);
+      if (!preview || rest.length === 0) return notFound();
+      return serve(rest, (path) => preview.files.get(path) ?? null, `/__errors/__preview/${id}`);
+    }
     const [slug = '', ...rest] = segments;
     if (!projects.project(slug)) return notFound();
     // "/my-site" -> "/my-site/", so relative links in its pages work.
     if (segments.length === 1) return c.redirect(`/${encodeURIComponent(slug)}/`, 301);
-    const path = rest.join('/') || 'index.html';
-    const clean = cleanProjectPath(path.endsWith('/') ? `${path}index.html` : path);
-    const content = clean ? projects.file(slug, clean) : null;
-    if (!clean || content === null) return notFound();
-    const ext = clean.slice(clean.lastIndexOf('.') + 1).toLowerCase();
     const version = projects.version(slug);
-    const body = ext === 'html' && version ? withReporter(content, `/__errors/${slug}/${reportKey(slug, version)}`) : content;
-    return c.body(body, 200, {
-      ...SECURITY_HEADERS,
-      'content-type': TYPES[ext] ?? TYPES.txt!,
-      // Lets the page see its own scripts' errors (see withReporter); the files are public anyway.
-      ...(ext === 'js' ? { 'access-control-allow-origin': '*' } : {}),
-    });
+    return serve(rest, (path) => projects.file(slug, path), version ? `/__errors/${slug}/${reportKey(slug, version)}` : null);
   });
 
   return app;

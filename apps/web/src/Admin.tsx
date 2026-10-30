@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { AdminLetter, AdminOverview, Artwork } from '@ampli-world/shared';
+import { plotById, type AdminBuild, type AdminLetter, type AdminOverview, type Artwork } from '@ampli-world/shared';
 
 const TOKEN_KEY = 'aw_admin';
-const VIEWS = ['held', 'reported', 'recent', 'art'] as const;
+const VIEWS = ['held', 'reported', 'recent', 'art', 'builds'] as const;
 type View = (typeof VIEWS)[number];
 
 function readToken(): string {
@@ -90,6 +90,37 @@ function ArtRow({
   );
 }
 
+function BuildRow({ build, token, onAction }: { build: AdminBuild; token: string; onAction: (id: number, action: 'approve' | 'hide') => void }) {
+  return (
+    <li className="letter">
+      <div className="letter-head">
+        <strong>
+          #{build.id} {build.name}
+        </strong>
+        <span className={`badge status-${build.status === 'shown' ? 'replied' : 'held'}`}>{build.status}</span>
+        <span className="hint">
+          {plotById(build.plot)?.where ?? build.plot} · {new Date(build.createdAt).toLocaleString()}
+        </span>
+      </div>
+      <AdminImage className="admin-art admin-build" token={token} path={`/api/admin/build/${build.id}.svg`} alt={build.name} />
+      <p className="letter-text">{build.description}</p>
+      {build.note && <p className="hint">Note: {build.note}</p>}
+      <div className="admin-actions">
+        {build.status !== 'shown' && (
+          <button type="button" onClick={() => onAction(build.id, 'approve')}>
+            Put it up
+          </button>
+        )}
+        {build.status === 'shown' && (
+          <button type="button" className="danger" onClick={() => onAction(build.id, 'hide')}>
+            Take it down
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function LetterRow({
   letter,
   token,
@@ -142,6 +173,7 @@ export function Admin() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [letters, setLetters] = useState<AdminLetter[]>([]);
   const [art, setArt] = useState<(Artwork & { note?: string })[]>([]);
+  const [builds, setBuilds] = useState<AdminBuild[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fail = useCallback((err: unknown) => {
@@ -157,6 +189,7 @@ export function Admin() {
     setError(null);
     adminFetch<AdminOverview>(token, '/api/admin/overview').then(setOverview).catch(fail);
     if (view === 'art') adminFetch<Artwork[]>(token, '/api/admin/art?view=recent').then(setArt).catch(fail);
+    else if (view === 'builds') adminFetch<AdminBuild[]>(token, '/api/admin/builds').then(setBuilds).catch(fail);
     else adminFetch<AdminLetter[]>(token, `/api/admin/letters?view=${view}`).then(setLetters).catch(fail);
   }, [token, view, fail]);
 
@@ -176,6 +209,11 @@ export function Admin() {
 
   async function actOnArt(id: number, action: 'approve' | 'hide') {
     await adminFetch(token, `/api/admin/art/${id}/${action}`, {}).catch(fail);
+    refresh();
+  }
+
+  async function actOnBuild(id: number, action: 'approve' | 'hide') {
+    await adminFetch(token, `/api/admin/builds/${id}/${action}`, {}).catch(fail);
     refresh();
   }
 
@@ -247,14 +285,24 @@ export function Admin() {
             className={view === v ? 'tab tab-active' : 'tab'}
             onClick={() => setView(v)}
           >
-            {v === 'held' ? 'Held for review' : v === 'reported' ? 'Reported' : v === 'recent' ? 'All recent' : 'Art'}
+            {v === 'held' ? 'Held for review' : v === 'reported' ? 'Reported' : v === 'recent' ? 'All recent' : v === 'art' ? 'Art' : 'Built'}
           </button>
         ))}
       </nav>
 
       {error && <p className="form-error">{error}</p>}
       <section className="card">
-        {view === 'art' ? (
+        {view === 'builds' ? (
+          builds.length === 0 ? (
+            <p className="empty">Nothing built yet.</p>
+          ) : (
+            <ul className="letters">
+              {builds.map((b) => (
+                <BuildRow key={b.id} build={b} token={token} onAction={actOnBuild} />
+              ))}
+            </ul>
+          )
+        ) : view === 'art' ? (
           art.length === 0 ? (
             <p className="empty">No artworks yet.</p>
           ) : (

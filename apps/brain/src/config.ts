@@ -94,6 +94,11 @@ export const config = {
   /** The Code Lab. A session writes a whole website, so in the cloud it's capped tighter. */
   code: process.env.CODE !== 'off',
   codePerDay: costLimit('CODE_PER_DAY', 2),
+  /** Switched off in the settings (or BUILD=off): the character can't build in town. */
+  build: process.env.BUILD !== 'off',
+  // Not about cost: a town that's rebuilt every hour stops being a place.
+  buildsPerDay: Number(process.env.BUILDS_PER_DAY || 2),
+  hangsPerDay: Number(process.env.HANGS_PER_DAY || 3),
   // No limit by default: notes are Ampli's way to reach people. Set NOTES_PER_DAY to cap them.
   notesPerDay: process.env.NOTES_PER_DAY ? Number(process.env.NOTES_PER_DAY) : Infinity,
   webExcludeDomains: (process.env.WEB_EXCLUDE_DOMAINS ?? '')

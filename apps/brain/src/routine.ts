@@ -40,6 +40,8 @@ const OFFLINE_THOUGHTS: Record<ActivityKind, string[]> = {
   post_note: ['Maybe someone out there wants to write to me.'],
   visit_workshop: ["Let's see what GyrOS is up to."],
   code: ['Time to build something.'],
+  build: ['I want to add something to the town.'],
+  hang_painting: ['One of my paintings deserves a wall.'],
 };
 
 function pick<T>(items: T[], random: () => number): T {
@@ -64,6 +66,8 @@ export function availableActivities(
     canPostNote?: boolean;
     canVisitWorkshop?: boolean;
     canCode?: boolean;
+    canBuild?: boolean;
+    canHang?: boolean;
   } = {},
 ): ActivityKind[] {
   const h = hourOf(simTime);
@@ -78,6 +82,8 @@ export function availableActivities(
     if (k === 'post_note') return opts.canPostNote === true;
     if (k === 'visit_workshop') return opts.canVisitWorkshop === true;
     if (k === 'code') return opts.canCode === true;
+    if (k === 'build') return opts.canBuild === true;
+    if (k === 'hang_painting') return opts.canHang === true;
     return true;
   });
 }

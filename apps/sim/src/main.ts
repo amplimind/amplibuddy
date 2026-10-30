@@ -6,7 +6,8 @@ import { createApp } from './http.ts';
 import { libraryDir } from '@ampli-world/shared/node';
 import { loadLibrary } from './library.ts';
 import { GitServer, Projects } from './projects.ts';
-import { createSitesApp } from './sites.ts';
+import { SitePreviews, createSitesApp } from './sites.ts';
+import { BrowserCheck, findBrowser } from './browser.ts';
 import { Sim } from './sim.ts';
 import { Store } from './store.ts';
 
@@ -39,6 +40,12 @@ if (config.code) {
       ? new GitServer(config.gitUrl, config.gitUser, config.gitToken, { name: persona.name, email: `${config.gitUser}@ampli.local` })
       : null;
   sim.projects = new Projects(config.projectsDir, `http://localhost:${config.sitesPort}`, git);
+  const previews = new SitePreviews();
+  const browser = findBrowser(process.env.CODE_BROWSER);
+  if (browser) {
+    const check = new BrowserCheck(browser, previews, `http://127.0.0.1:${config.sitesPort}`);
+    sim.projects.browserCheck = (files) => check.run(files);
+  }
   // Its own port and origin: the sites never share cookies or storage with the town's page.
   sitesServer = serve(
     {
@@ -46,11 +53,16 @@ if (config.code) {
         sim.projects,
         () => persona.name,
         ({ slug, name }, problem) => sim.log({ type: 'site_error', data: { project: slug, name, problem } }),
+        previews,
       ).fetch,
       port: config.sitesPort,
       hostname: '127.0.0.1',
     },
-    ({ port }) => console.log(`[sim] Code Lab sites at http://localhost:${port}${git ? ` · Git at ${git.url}` : ' · no Git server'}`),
+    ({ port }) =>
+      console.log(
+        `[sim] Code Lab sites at http://localhost:${port}${git ? ` · Git at ${git.url}` : ' · no Git server'}` +
+          (browser ? ` · pages tried in ${browser.split('/').pop()}` : ' · no browser to try pages in'),
+      ),
   );
 }
 
@@ -79,6 +91,7 @@ const app = createApp(sim, {
   adminToken: config.adminToken,
   sitePassword: config.sitePassword,
   letterLimits: config.letterLimits,
+  building: config.build,
 });
 if (!config.sitePassword) console.warn('[sim] SITE_PASSWORD is empty: only run this on a trusted network (VPN/office).');
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {

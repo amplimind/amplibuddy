@@ -1,4 +1,4 @@
-import type { BookWithText, EventBody, Neighbor, Persona, WorldEvent, WorldSnapshot } from '@ampli-world/shared';
+import { frameById, type BookWithText, type EventBody, type Neighbor, type Persona, type WorldEvent, type WorldSnapshot } from '@ampli-world/shared';
 import { Engine, initialState } from './engine.ts';
 import type { GyrosBridge } from './gyros.ts';
 import type { ShelfBook } from './library.ts';
@@ -63,6 +63,7 @@ export class Sim {
       mailWaiting: this.store.mailStats().waiting,
       latestArtId: this.store.latestArtId(),
       openQuestion: this.store.openQuestion(),
+      townVersion: this.store.townVersion(),
       gyros: this.gyros?.state() ?? null,
     };
   }
@@ -88,6 +89,21 @@ export class Sim {
   private record(body: EventBody, simTime: number): WorldEvent {
     const event = this.store.appendEvent(simTime, body);
     this.hub.broadcast({ event: 'event', data: JSON.stringify(event) });
+    if (body.type === 'activity_started' && body.data.kind === 'hang_painting') this.hangPainting(simTime);
     return event;
+  }
+
+  /** At the frame: the painting goes up (if it's still in the gallery), the old one comes down. */
+  private hangPainting(simTime: number): void {
+    const { frame: frameId, artId } = this.engine.agent.activity ?? {};
+    const frame = frameById(frameId);
+    const art = typeof artId === 'number' ? this.store.artwork(artId) : null;
+    if (!frame || !art || art.status !== 'shown') return;
+    const before = this.store.hangPainting(frame.id, art.id, simTime);
+    const replaced = before !== null && before !== art.id ? this.store.artwork(before)?.title : undefined;
+    this.record(
+      { type: 'painting_hung', data: { frame: frame.id, where: frame.where, artId: art.id, title: art.title, ...(replaced ? { replaced } : {}) } },
+      simTime,
+    );
   }
 }

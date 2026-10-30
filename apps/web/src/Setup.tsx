@@ -637,13 +637,17 @@ function ResidentsEditor({
 function ExtrasForm({
   speed,
   gyros,
+  building,
   onSpeed,
   onGyros,
+  onBuilding,
 }: {
   speed: number;
   gyros: { url: string; uiUrl: string };
+  building: boolean;
   onSpeed: (s: number) => void;
   onGyros: (g: { url: string; uiUrl: string }) => void;
+  onBuilding: (b: boolean) => void;
 }) {
   return (
     <div className="setup-form">
@@ -657,6 +661,16 @@ function ExtrasForm({
           {!SPEEDS.some((s) => Math.abs(s.value - speed) < 1e-6) && <option value={speed}>Custom: {speed} town minutes per second</option>}
         </select>
       </Field>
+      <div className="field">
+        <label className="check">
+          <input type="checkbox" checked={building} onChange={(e) => onBuilding(e.target.checked)} />
+          Your character may build things in town
+        </label>
+        <span className="hint">
+          It designs them itself and puts them on the plots around town. Untick to stop it: nothing new goes up, and what it built is
+          hidden until you allow it again. Hanging its paintings isn't affected.
+        </span>
+      </div>
       <GitStatus />
       <GyrosConnect gyros={gyros} onGyros={onGyros} />
     </div>
@@ -958,6 +972,7 @@ function Settings({ state }: { state: SetupState }) {
   });
   const [speed, setSpeed] = useState(state.speed);
   const [gyros, setGyros] = useState(state.gyros);
+  const [building, setBuilding] = useState(state.building);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingNeighbour, setEditingNeighbour] = useState(false);
@@ -973,6 +988,7 @@ function Settings({ state }: { state: SetupState }) {
         ...(brainReady(brain, state.brain.hasKey) ? { brain: brainApply(brain) } : {}),
         speed,
         gyros,
+        building,
       });
     } catch (err) {
       setError((err as Error).message);
@@ -1002,7 +1018,7 @@ function Settings({ state }: { state: SetupState }) {
           />
         )}
         {tab === 'Library' && <LibraryEditor name={persona.name || 'your character'} onBusy={setEditingBook} />}
-        {tab === 'Extras' && <ExtrasForm speed={speed} gyros={gyros} onSpeed={setSpeed} onGyros={setGyros} />}
+        {tab === 'Extras' && <ExtrasForm speed={speed} gyros={gyros} building={building} onSpeed={setSpeed} onGyros={setGyros} onBuilding={setBuilding} />}
       </div>
       {error && <p className="error">{error}</p>}
       <div className="setup-nav">

@@ -152,7 +152,9 @@ function FeedItem({ event }: { event: WorldEvent }) {
       return (
         <li className="feed-item feed-minor">
           {time} started{' '}
-          {event.data.bookTitle
+          {event.data.where
+            ? `${ACTIVITIES[event.data.kind].verb} ${event.data.where}`
+            : event.data.bookTitle
             ? `reading “${event.data.bookTitle}”`
             : event.data.query
               ? `looking up “${event.data.query}”`
@@ -225,6 +227,31 @@ function FeedItem({ event }: { event: WorldEvent }) {
             {event.data.caption}
           </p>
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
+    case 'built':
+      if (event.data.held || !event.data.buildId) {
+        return <li className="feed-item feed-minor">{time} built something {event.data.where}, but it didn't pass the content check</li>;
+      }
+      return (
+        <li className="feed-item feed-art feed-build">
+          {time}
+          <img src={`/api/build/${event.data.buildId}.svg`} alt={event.data.name} loading="lazy" />
+          <p>
+            <span className="feed-kicker">
+              🔨 Built “{event.data.name}” {event.data.where}
+            </span>
+            {event.data.description}
+            {event.data.replaced && <span className="hint"> (instead of “{event.data.replaced}”)</span>}
+          </p>
+          {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
+    case 'painting_hung':
+      return (
+        <li className="feed-item feed-minor">
+          {time} 🖼️ hung “{event.data.title}” {event.data.where}
+          {event.data.replaced ? ` (instead of “${event.data.replaced}”)` : ''}
         </li>
       );
     case 'mail_read':

@@ -60,6 +60,8 @@ export interface SetupState {
   /** Sim minutes per real second. */
   speed: number;
   gyros: { url: string; uiUrl: string };
+  /** Whether the character may build things in town. */
+  building: boolean;
   templates: { characters: PersonalityTemplate[]; residents: PersonalityTemplate[] };
   machine: { ramGb: number };
 }
@@ -71,6 +73,7 @@ export interface SetupApply {
   brain?: { mode: BrainMode; model?: string; visionModel?: string; openrouterKey?: string };
   speed?: number;
   gyros?: { url: string; uiUrl: string };
+  building?: boolean;
   complete?: boolean;
 }
 

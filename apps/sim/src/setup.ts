@@ -195,6 +195,7 @@ export function setupState(): SetupState {
     },
     speed: Number(env.SIM_MINUTES_PER_SECOND ?? 0.1),
     gyros: { url: env.GYROS_URL ?? '', uiUrl: env.GYROS_UI_URL ?? '' },
+    building: env.BUILD !== 'off',
     templates: { characters: readTemplates('characters'), residents: readTemplates('residents') },
     machine: { ramGb: Math.round(totalmem() / 1024 ** 3) },
   };
@@ -289,8 +290,10 @@ export function applySetup(body: SetupApply, store: Store, log: (event: EventBod
     };
     settings.gyros = { url: local(body.gyros.url), uiUrl: local(body.gyros.uiUrl) };
   }
+  const building = typeof body.building === 'boolean' && body.building !== (process.env.BUILD !== 'off');
+  if (building) settings.building = body.building;
   if (body.complete) settings.setupComplete = true;
-  if (body.brain || body.speed !== undefined || body.gyros || body.complete) writeSettings(settings);
+  if (body.brain || body.speed !== undefined || body.gyros || building || body.complete) writeSettings(settings);
 }
 
 async function ollamaStatus(): Promise<OllamaStatus> {

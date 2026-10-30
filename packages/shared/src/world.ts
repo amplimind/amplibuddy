@@ -235,6 +235,26 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
     minutes: 60,
     rates: { energy: -6, satiety: -6, fun: 22, social: 2 },
   },
+  // Building and hanging happen at a plot or a frame (see building.ts); `place` is only a
+  // fallback, the plan's plot or frame decides where the character goes.
+  build: {
+    kind: 'build',
+    place: 'plaza',
+    verb: 'building something for the town',
+    description:
+      'Build something for the town on one of the plots (pick a plot): a bench, a lamp, a birdhouse, a sculpture, a sign, whatever you want to add. You design it yourself; everyone in town will see it. Building on a taken plot replaces what stands there, so you can also improve or rebuild your earlier things.',
+    minutes: 60,
+    rates: { energy: -8, satiety: -7, fun: 24, social: -1 },
+  },
+  hang_painting: {
+    kind: 'hang_painting',
+    place: 'plaza',
+    verb: 'hanging up a painting',
+    description:
+      'Hang one of your paintings somewhere in town (pick a painting and a frame): on the easels on the plaza where everyone passes, at home, in the café or on your studio wall. A painting already there comes down.',
+    minutes: 20,
+    rates: { energy: -2, satiety: -2, fun: 12, social: 4 },
+  },
   check_mail: {
     kind: 'check_mail',
     place: 'plaza',

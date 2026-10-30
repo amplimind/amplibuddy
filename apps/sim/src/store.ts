@@ -5,6 +5,10 @@ import type { NudgeMemory } from './gyros.ts';
 import type {
   AdminLetter,
   ArtStatus,
+  AdminBuild,
+  BuildStatus,
+  TownBuild,
+  TownFrame,
   Artwork,
   CheckLetter,
   BrainLetter,
@@ -95,6 +99,28 @@ const SCHEMA = `
     llm TEXT
   );
 
+  -- What the character built on the plots: every version stays, the newest shown one per plot stands.
+  CREATE TABLE IF NOT EXISTS builds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plot TEXT NOT NULL,
+    sim_time REAL NOT NULL,
+    real_time TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    svg TEXT NOT NULL,
+    status TEXT NOT NULL,
+    note TEXT,
+    llm TEXT
+  );
+  CREATE INDEX IF NOT EXISTS builds_plot ON builds (plot, status);
+
+  -- Which painting hangs on which frame.
+  CREATE TABLE IF NOT EXISTS frames (
+    frame TEXT PRIMARY KEY,
+    art_id INTEGER NOT NULL,
+    sim_time REAL NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS reports (
     letter_id INTEGER NOT NULL,
     reporter TEXT NOT NULL,
@@ -131,6 +157,19 @@ function toLetter(row: Row): Letter {
     ...(row.question ? { question: String(row.question) } : {}),
     ...(row.doodle_caption ? { doodleCaption: String(row.doodle_caption) } : {}),
     ...(replied ? { reply: String(row.reply), repliedSimTime: Number(row.replied_sim) } : {}),
+  };
+}
+
+function toAdminBuild(row: Row): AdminBuild {
+  return {
+    id: Number(row.id),
+    plot: String(row.plot),
+    name: String(row.name),
+    description: String(row.description),
+    simTime: Number(row.sim_time),
+    status: row.status as BuildStatus,
+    createdAt: String(row.real_time),
+    ...(row.note ? { note: String(row.note) } : {}),
   };
 }
 
@@ -494,6 +533,8 @@ export class Store {
 
   setArtStatus(id: number, status: ArtStatus): void {
     this.db.prepare('UPDATE artworks SET status = ? WHERE id = ?').run(status, id);
+    // It may hang somewhere in town.
+    this.bumpTownVersion();
   }
 
   latestArtId(): number | null {
@@ -506,6 +547,92 @@ export class Store {
     const since = `${new Date().toISOString().slice(0, 10)}T00:00:00`;
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM artworks WHERE real_time >= ?').get(since) as Row;
     return Number(row.n);
+  }
+
+  // --- Things built and hung in town ---
+
+  createBuild(b: { plot: string; simTime: number; name: string; description: string; svg: string; status: ArtStatus; note?: string; llm?: LlmMeta }): number {
+    if (b.status === 'shown') this.replaceOnPlot(b.plot);
+    const res = this.db
+      .prepare('INSERT INTO builds (plot, sim_time, real_time, name, description, svg, status, note, llm) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(b.plot, b.simTime, new Date().toISOString(), b.name, b.description, b.svg, b.status, b.note ?? null, b.llm ? JSON.stringify(b.llm) : null);
+    if (b.status === 'shown') this.bumpTownVersion();
+    return Number(res.lastInsertRowid);
+  }
+
+  /** Whatever stood on the plot is replaced, so hiding the new one later leaves the plot empty. */
+  private replaceOnPlot(plot: string): void {
+    this.db.prepare("UPDATE builds SET status = 'replaced' WHERE plot = ? AND status = 'shown'").run(plot);
+  }
+
+  adminBuilds(limit = 60): AdminBuild[] {
+    return (this.db.prepare('SELECT * FROM builds ORDER BY id DESC LIMIT ?').all(limit) as Row[]).map(toAdminBuild);
+  }
+
+  /** Shows a build (it replaces what stands on its plot) or takes it down (the plot is empty then). */
+  setBuildStatus(id: number, status: 'shown' | 'hidden'): void {
+    const row = this.db.prepare('SELECT plot FROM builds WHERE id = ?').get(id) as Row | undefined;
+    if (!row) return;
+    if (status === 'shown') this.replaceOnPlot(String(row.plot));
+    this.db.prepare('UPDATE builds SET status = ? WHERE id = ?').run(status, id);
+    this.bumpTownVersion();
+  }
+
+  build(id: number): AdminBuild | null {
+    const row = this.db.prepare('SELECT * FROM builds WHERE id = ?').get(id) as Row | undefined;
+    return row ? toAdminBuild(row) : null;
+  }
+
+  /** What stands on each plot now: its newest shown build. */
+  currentBuilds(): TownBuild[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM builds b WHERE status = 'shown' AND id = (SELECT MAX(id) FROM builds WHERE plot = b.plot AND status = 'shown') ORDER BY id",
+      )
+      .all() as Row[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      plot: String(row.plot),
+      name: String(row.name),
+      description: String(row.description),
+      simTime: Number(row.sim_time),
+    }));
+  }
+
+  buildSvg(id: number): { status: BuildStatus; svg: string } | null {
+    const row = this.db.prepare('SELECT status, svg FROM builds WHERE id = ?').get(id) as Row | undefined;
+    return row ? { status: row.status as BuildStatus, svg: String(row.svg) } : null;
+  }
+
+  /** Builds since 00:00 UTC (any status), for the daily cap. */
+  countBuildsToday(): number {
+    const since = `${new Date().toISOString().slice(0, 10)}T00:00:00`;
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM builds WHERE real_time >= ?').get(since) as Row).n);
+  }
+
+  /** Hangs a painting on a frame; returns the id of the one it replaced, if any. */
+  hangPainting(frame: string, artId: number, simTime: number): number | null {
+    const before = this.db.prepare('SELECT art_id FROM frames WHERE frame = ?').get(frame) as Row | undefined;
+    this.db.prepare('INSERT OR REPLACE INTO frames (frame, art_id, sim_time) VALUES (?, ?, ?)').run(frame, artId, simTime);
+    this.bumpTownVersion();
+    return before ? Number(before.art_id) : null;
+  }
+
+  /** Paintings on the frames (only those still shown in the gallery). */
+  hungPaintings(): TownFrame[] {
+    const rows = this.db
+      .prepare("SELECT f.frame, f.art_id, f.sim_time, a.title FROM frames f JOIN artworks a ON a.id = f.art_id WHERE a.status = 'shown' ORDER BY f.frame")
+      .all() as Row[];
+    return rows.map((row) => ({ frame: String(row.frame), artId: Number(row.art_id), title: String(row.title), simTime: Number(row.sim_time) }));
+  }
+
+  townVersion(): number {
+    const row = this.db.prepare("SELECT value FROM kv WHERE key = 'town_version'").get() as Row | undefined;
+    return row ? Number(row.value) : 0;
+  }
+
+  private bumpTownVersion(): void {
+    this.db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES ('town_version', ?)").run(String(this.townVersion() + 1));
   }
 
   /** Visitors whose last visit is older than `beforeIso`. */

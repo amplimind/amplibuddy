@@ -1,7 +1,10 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
+  FRAMES,
   MAX_QUERY_CHARS,
   PLACES,
+  PLOTS,
+  plotById,
   dayOf,
   formatHours,
   neighborPresent,
@@ -32,6 +35,9 @@ import {
   ampliChatUser,
   artTool,
   browseSystem,
+  buildSystem,
+  buildTool,
+  buildUser,
   chatSystem,
   decideSystem,
   decideTool,
@@ -112,6 +118,19 @@ export function toDecision(
     const query = typeof args.search === 'string' ? args.search.trim().slice(0, MAX_QUERY_CHARS) : '';
     if (!query) throw new Error('browse chosen without a search query');
     return { plan: { kind, query }, thought };
+  }
+  if (kind === 'build') {
+    // A plot it didn't name: the first empty one, or else any.
+    const plot = plotById(typeof args.plot === 'string' ? args.plot : undefined) ??
+      PLOTS.find((p) => !ctx.town.builds.some((b) => b.plot === p.id)) ??
+      PLOTS[Math.floor(Math.random() * PLOTS.length)]!;
+    return { plan: { kind, plot: plot.id }, thought };
+  }
+  if (kind === 'hang_painting') {
+    const painting = ctx.paintings.find((p) => String(p.id) === String(args.painting)) ?? ctx.paintings[0];
+    if (!painting) throw new Error('hang_painting chosen without a painting');
+    const frame = FRAMES.find((f) => f.id === args.frame) ?? FRAMES.find((f) => !ctx.town.frames.some((h) => h.frame === f.id)) ?? FRAMES[0]!;
+    return { plan: { kind, artId: painting.id, frame: frame.id }, thought };
   }
   if (kind === 'chat') {
     const present = presentNeighbors(ctx);
@@ -259,6 +278,9 @@ export function searchSkipMs(err: unknown): number {
 /** After a failed moderation call, wait this long before retrying the queue. */
 const MODERATION_BACKOFF_MS = 60_000;
 
+/** How often a coding session may fix what the dry run found before it commits anyway. */
+const CODE_FIX_ROUNDS = 2;
+
 function cost(meta: LlmMeta): string {
   return `$${meta.costUsd.toFixed(4)}, ${meta.latencyMs}ms`;
 }
@@ -272,6 +294,7 @@ export class Mind {
   private answering = false;
   private browseFor: number | null = null;
   private paintFor: number | null = null;
+  private buildFor: number | null = null;
   private chatFor: number | null = null;
   private noteFor: number | null = null;
   private workshopFor: number | null = null;
@@ -354,6 +377,12 @@ export class Mind {
       if (!done) void this.paint(ctx);
     }
 
+    if (activity.kind === 'build' && activity.plot && this.buildFor !== activity.startedAt) {
+      this.buildFor = activity.startedAt;
+      const done = ctx.recentEvents.some((e) => e.type === 'built' && e.simTime >= activity.startedAt);
+      if (!done) void this.build(ctx, activity.plot);
+    }
+
     if (activity.kind === 'check_mail' && this.mailFor !== activity.startedAt) {
       this.mailFor = activity.startedAt;
       void this.answerMail(ctx);
@@ -399,6 +428,8 @@ export class Mind {
     const canPostNote = ctx.notesToday < this.cfg.notesPerDay;
     const canVisitWorkshop = ctx.snapshot.gyros?.connected === true;
     const canCode = this.cfg.code && ctx.codeToday < this.cfg.codePerDay;
+    const canBuild = this.cfg.build && ctx.buildsToday < this.cfg.buildsPerDay;
+    const canHang = ctx.paintings.length > 0 && ctx.hangsToday < this.cfg.hangsPerDay;
     const kinds = availableActivities(ctx.snapshot.simTime, {
       canCode,
       mailWaiting: this.answering ? 0 : ctx.mail.waiting,
@@ -407,6 +438,8 @@ export class Mind {
       canChat,
       canPostNote,
       canVisitWorkshop,
+      canBuild,
+      canHang,
     });
     // Say why something is missing, so Ampli can let go of a plan instead of circling it.
     const unavailable: string[] = [];
@@ -424,6 +457,9 @@ export class Mind {
     if (this.cfg.webSearch && !canBrowse) unavailable.push('browse: no more web searches today');
     if (!canPaint) unavailable.push("paint: you've painted enough for today");
     if (this.cfg.code && !canCode) unavailable.push("code: you've coded enough for today");
+    if (!this.cfg.build) unavailable.push('build: building is switched off in this town for now');
+    else if (!canBuild) unavailable.push("build: you've built enough for today; let the town settle");
+    if (ctx.paintings.length > 0 && !canHang) unavailable.push("hang_painting: you've rearranged your paintings enough for today");
     try {
       const ask = async (notes: string[]) => {
         const { args, meta } = await this.llm({
@@ -434,6 +470,7 @@ export class Mind {
             kinds,
             ctx.books.map((b) => b.id),
             present.map((n) => n.name),
+            ctx.paintings.map((p) => p.id),
           ),
           maxTokens: 300,
         });
@@ -614,30 +651,32 @@ export class Mind {
       const metas = [meta, plan.meta];
       const project = chosen?.slug ?? name;
 
-      // A dry run before committing: if a linked file is missing or a script doesn't
-      // compile, ask once more in the same session, with the problems spelled out.
-      if (files.length > 0) {
+      // A dry run before committing: if a linked file is missing, a script doesn't compile
+      // or the page breaks when the Code Lab's browser opens it, ask again in the same
+      // session, with the problems spelled out. Twice at most: fixing one error can uncover
+      // the next.
+      for (let round = 0; round < CODE_FIX_ROUNDS && files.length > 0; round++) {
         const { problems } = await this.sim.codeCheck({ project, files, deleted });
-        if (problems.length > 0) {
-          console.log(`[brain] code check before commit: ${problems.join('; ')}`);
-          const fix = await this.llm({
-            model: this.cfg.brainModel,
-            system: codeSystem(this.persona),
-            user: `${codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen }, [...current, ...files])}\n\n${codeFixUser(files.map((f) => f.path), problems)}`,
-            tool: codeTool,
-            maxTokens: 12_000,
-            temperature: 0.5,
-          }).catch((err: Error) => {
-            console.warn('[brain] fixing the code failed:', err.message);
-            return null;
-          });
-          if (fix) {
-            metas.push(fix.meta);
-            const byPath = new Map(files.map((f) => [f.path, f]));
-            for (const f of codeFilesFrom(fix.args.files)) byPath.set(f.path, f);
-            files = [...byPath.values()];
-          }
-        }
+        if (problems.length === 0) break;
+        console.log(`[brain] code check before commit: ${problems.join('; ')}`);
+        // The project as it would be after this session: each file once, in its newest version.
+        const asItWouldBe = [...new Map([...current, ...files].map((f) => [f.path, f])).values()].filter((f) => !deleted.includes(f.path));
+        const fix = await this.llm({
+          model: this.cfg.brainModel,
+          system: codeSystem(this.persona),
+          user: `${codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen }, asItWouldBe)}\n\n${codeFixUser(files.map((f) => f.path), problems)}`,
+          tool: codeTool,
+          maxTokens: 12_000,
+          temperature: 0.5,
+        }).catch((err: Error) => {
+          console.warn('[brain] fixing the code failed:', err.message);
+          return null;
+        });
+        if (!fix) break;
+        metas.push(fix.meta);
+        const byPath = new Map(files.map((f) => [f.path, f]));
+        for (const f of codeFilesFrom(fix.args.files)) byPath.set(f.path, f);
+        files = [...byPath.values()];
       }
       const message = typeof args.message === 'string' ? args.message.trim() : '';
       if (files.length === 0 && deleted.length === 0) {
@@ -808,6 +847,43 @@ export class Mind {
     } catch (err) {
       // A 400 means the SVG broke the safety rules; nothing gets hung up.
       console.warn('[brain] painting failed:', (err as Error).message);
+    }
+  }
+
+  /** At a plot: design the thing (as SVG), check it like a painting, and put it up. */
+  private async build(ctx: BrainContext, plotId: string): Promise<void> {
+    const plot = plotById(plotId);
+    if (!plot || !this.llmAvailable(ctx)) return;
+    try {
+      const standing = ctx.town.builds.find((b) => b.plot === plot.id);
+      const svg = standing ? await this.sim.buildSvg(standing.id) : null;
+      const current = standing && svg ? { name: standing.name, description: standing.description, svg } : null;
+      const { args, meta } = await this.llm({
+        model: this.cfg.reflectModel,
+        system: buildSystem(this.persona),
+        user: buildUser(ctx, plot, current),
+        tool: buildTool,
+        maxTokens: 4000,
+        temperature: 0.9,
+      });
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      const description = typeof args.description === 'string' ? args.description.trim() : '';
+      const drawing = typeof args.svg === 'string' ? args.svg : '';
+      if (!name || !description || !drawing) throw new Error('the build came back incomplete');
+      const check = await this.moderate('art', `Name: ${name}\nPlaque: ${description}\n\n${drawing}`);
+      const held = check.verdict === 'hold';
+      await this.sim.build({
+        plot: plot.id,
+        name,
+        description,
+        svg: drawing,
+        ...(held ? { held: true, note: check.reason } : {}),
+        llm: [meta, check.meta],
+      });
+      console.log(`[brain] built "${name}" ${plot.where} (${drawing.length} chars, ${held ? `held (${check.reason})` : 'standing'}) (${cost(meta)})`);
+    } catch (err) {
+      // A 400 means the SVG broke the safety rules; nothing goes up.
+      console.warn('[brain] building failed:', (err as Error).message);
     }
   }
 

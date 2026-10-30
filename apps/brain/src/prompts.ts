@@ -1,6 +1,10 @@
 import {
   ACTIVITIES,
   ART_VIEWBOX,
+  BUILD_VIEWBOX,
+  FRAMES,
+  MAX_BUILD_NAME_CHARS,
+  PLOTS,
   EVERYDAY_WORDS,
   contentWords,
   MAX_COMMIT_MESSAGE_CHARS,
@@ -32,6 +36,7 @@ import {
   type GyrosRun,
   type GyrosState,
   type Neighbor,
+  type PlotDef,
   type WorldEvent,
 } from '@ampli-world/shared';
 import type { ToolSpec } from './llm.ts';
@@ -67,6 +72,7 @@ export const TOWN_GUIDE = `## Your town
 - Art Studio: you paint pictures (written as SVG). They hang in your gallery.
 - Code Lab: you build small websites (HTML, CSS, JavaScript). Each session is a commit in your own Git repository, and the site is online at once for the people who watch you.
 - Workshop: GyrOS, a system the people who watch you use at work to turn tickets into pull requests. When it runs, you can watch it and ring its bell when something waits for a human.
+- All over town: plots where you can build things (a bench, a lamp, a sculpture, whatever you design), and frames where you can hang your paintings (the easels on the plaza, your cottage, the café, your studio wall). What you build and hang stays, and everyone sees it.
 The people who watch you see all of this on a web page: your town, what you're doing, your thoughts, your paintings, your websites, your diary and your notebook. They're colleagues at work, not visitors in town.`;
 
 export function buildPersonaPrompt(fileText: string): string {
@@ -116,6 +122,7 @@ export function describeEvent(e: WorldEvent): string | null {
     case 'walk_started':
       return `${at} You walked from ${PLACES[e.data.from].name} to ${PLACES[e.data.to].name}.`;
     case 'activity_started':
+      if (e.data.where) return `${at} You started ${ACTIVITIES[e.data.kind].verb} ${e.data.where}.`;
       if (e.data.bookTitle) return `${at} You started reading "${e.data.bookTitle}".`;
       if (e.data.query) return `${at} You went online to look up "${e.data.query}".`;
       if (e.data.with) return `${at} You started chatting with ${e.data.with} at ${PLACES[e.data.place].name}.`;
@@ -152,6 +159,11 @@ export function describeEvent(e: WorldEvent): string | null {
       return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}${
         e.data.warnings?.length ? ` The Code Lab's check found problems to fix next time: ${e.data.warnings.join('; ')}.` : ''
       }`;
+    case 'built':
+      if (e.data.held) return `${at} You built something ${e.data.where}, but it didn't pass the content check, so nothing went up.`;
+      return `${at} You built "${e.data.name}" ${e.data.where}: ${e.data.description}${e.data.replaced ? ` It replaced your "${e.data.replaced}".` : ''}`;
+    case 'painting_hung':
+      return `${at} You hung your painting "${e.data.title}" ${e.data.where}${e.data.replaced ? `, where "${e.data.replaced}" hung before` : ''}.`;
     case 'site_error':
       return `${at} Someone opened your website "${e.data.name}", and it broke in their browser: ${e.data.problem}. It's on the Code Lab's list of problems to fix.`;
     case 'renamed':
@@ -187,6 +199,8 @@ const OPTION_ORDER: ActivityKind[] = [
   'post_note',
   'visit_workshop',
   'code',
+  'build',
+  'hang_painting',
   'check_mail',
   'chat',
   'stroll',
@@ -358,7 +372,7 @@ function diaryBlock(diary: DiaryEntry | null): string {
 
 // --- Decide ------------------------------------------------------------------
 
-export function decideTool(kinds: ActivityKind[], bookIds: string[], partners: string[] = []): ToolSpec {
+export function decideTool(kinds: ActivityKind[], bookIds: string[], partners: string[] = [], paintingIds: number[] = []): ToolSpec {
   return {
     name: 'decide',
     description: 'Choose what to do next.',
@@ -383,6 +397,15 @@ export function decideTool(kinds: ActivityKind[], bookIds: string[], partners: s
           : {}),
         ...(kinds.includes('chat') && partners.length > 0
           ? { with: { type: 'string', enum: partners, description: 'Only when activity is "chat": who you want to talk to.' } }
+          : {}),
+        ...(kinds.includes('build')
+          ? { plot: { type: 'string', enum: PLOTS.map((p) => p.id), description: 'Only when activity is "build": where to build.' } }
+          : {}),
+        ...(kinds.includes('hang_painting') && paintingIds.length > 0
+          ? {
+              painting: { type: 'string', enum: paintingIds.map(String), description: 'Only when activity is "hang_painting": the number of the painting.' },
+              frame: { type: 'string', enum: FRAMES.map((f) => f.id), description: 'Only when activity is "hang_painting": where to hang it.' },
+            }
           : {}),
       },
       required: ['thought', 'activity'],
@@ -416,6 +439,21 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
       if (k === 'code') {
         const sites = ctx.projects.map((p) => `"${p.name}"`).join(', ');
         return `- code @ ${PLACES.lab.name} (${minutes}): ${a.description}${sites ? ` Your websites so far: ${sites}.` : " You haven't built one yet."}`;
+      }
+      if (k === 'build') {
+        const plots = PLOTS.map((p) => {
+          const there = ctx.town.builds.find((b) => b.plot === p.id);
+          return `${p.id} (${p.where}${there ? `, your "${there.name}" stands there` : ', empty'})`;
+        }).join('; ');
+        return `- build @ the plot you choose (${minutes}): ${a.description} Plots: ${plots}. Name it in \`plot\`.`;
+      }
+      if (k === 'hang_painting') {
+        const frames = FRAMES.map((f) => {
+          const there = ctx.town.frames.find((h) => h.frame === f.id);
+          return `${f.id} (${f.where}${there ? `, "${there.title}" hangs there` : ', empty'})`;
+        }).join('; ');
+        const paintings = ctx.paintings.map((p) => `${p.id}: "${p.title}"`).join('; ');
+        return `- hang_painting @ the frame you choose (${minutes}): ${a.description} Frames: ${frames}. Your paintings, newest first: ${paintings}. Name them in \`frame\` and \`painting\`.`;
       }
       if (k === 'chat') {
         const here = presentNeighbors(ctx)
@@ -841,6 +879,66 @@ What happened recently (oldest first):
 ${recent.length > 0 ? recent.join('\n') : '(not much yet)'}`;
 }
 
+// --- Building things in town ----------------------------------------------------------
+
+export const buildTool: ToolSpec = {
+  name: 'build',
+  description: 'Build your thing on the plot.',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: `What it is, short (max ${MAX_BUILD_NAME_CHARS} characters), e.g. "Lantern for late walkers".` },
+      description: {
+        type: 'string',
+        description: 'The little plaque next to it: one or two sentences in your voice, what it is and why you built it.',
+      },
+      svg: {
+        type: 'string',
+        description: `How it looks: one self-contained SVG element with viewBox="0 0 ${BUILD_VIEWBOX.width} ${BUILD_VIEWBOX.height}" and a transparent background.`,
+      },
+    },
+    required: ['name', 'description', 'svg'],
+  },
+};
+
+export function buildSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're out in town with your tools, building something on a plot: your own addition to the place you live in. Whatever you want there: something useful (a bench, a lamp, a signpost, a birdhouse), something beautiful (a flower bed, a sculpture, a tiny fountain), something odd that's only yours. It stays until you build over it, and everyone who looks at the town sees it.
+
+You build it by drawing it as SVG:
+- One <svg> element with viewBox="0 0 ${BUILD_VIEWBOX.width} ${BUILD_VIEWBOX.height}" and NO background: everything around the object stays transparent, so the grass shows through.
+- The town looks like a cosy board game seen from above at a slight angle: draw the object from the front and a little above, standing on the bottom edge and filling most of the square.
+- Bold simple shapes, flat colours, a dark outline (#3b3127 matches the town). It's shown small, about 48 pixels, so leave out details smaller than 3 units. At most about 60 elements.
+- No text, scripts, event handlers, links, images, external references or fonts.
+Answer by calling the \`build\` tool once.`;
+}
+
+export function buildUser(ctx: BrainContext, plot: PlotDef, current: { name: string; description: string; svg: string } | null): string {
+  const { simTime, agent } = ctx.snapshot;
+  const recent = recentLines(ctx, 12);
+  const elsewhere = ctx.town.builds
+    .filter((b) => b.plot !== plot.id)
+    .map((b) => `"${b.name}" ${PLOTS.find((p) => p.id === b.plot)?.where ?? ''}`)
+    .join('; ');
+  const here = current
+    ? `Standing there now: your "${current.name}" (${current.description}). As you drew it:\n${current.svg}\nImprove it, rebuild it, or put something else there instead.`
+    : 'The plot is empty.';
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)} — ${partOfDay(simTime)}. Mood: ${agent.mood.label}.
+
+Your notebook:
+${notebookBlock(ctx.notebook)}
+${rutBlock(ctx)}
+What happened recently (oldest first):
+${recent.length > 0 ? recent.join('\n') : '(not much yet)'}
+
+Where you're building: ${plot.where}. ${here}
+What you've built elsewhere in town: ${elsewhere || 'nothing yet'}.`;
+}
+
 // --- Neighbours: conversations ---------------------------------------------------------
 
 export interface ChatTurn {
@@ -1085,7 +1183,7 @@ export function codePlanSystem(persona: string): string {
 ${GROUND_RULES}
 
 ## Your job right now
-You're at the Code Lab. Decide what to build in this session: improve one of your websites, or start a new one. Build what you actually want to make, from what's on your mind; something the people who watch you can open and enjoy.
+You're at the Code Lab. Decide what to build in this session: improve one of your websites, or start a new one. Build what you actually want to make, from what's on your mind; something the people who watch you can open and enjoy. If one of your websites has open problems, fixing it comes first: a page that's broken for everyone who opens it matters more than a new idea.
 
 ${CODE_RULES}
 
@@ -1123,7 +1221,7 @@ export function codeFixUser(written: string[], problems: string[]): string {
 Before committing, the Code Lab checked the website and found:
 ${problems.map((p) => `- ${p}`).join('\n')}
 
-Fix this now: write every file that's missing, and the complete corrected version of any file with an error (or put a script back into index.html). Only send the files you add or change.`;
+Fix this now: write every file that's missing, and the complete corrected version of any file with an error (or put a script back into index.html). When the browser stopped at a line, read the script top to bottom from there: what wasn't set up yet, or isn't visible where it's used? Only send the files you add or change.`;
 }
 
 /** Step 2: the files. */

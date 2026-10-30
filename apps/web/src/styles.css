@@ -916,6 +916,22 @@ img.doodle {
   margin: 4px 0 8px;
 }
 
+/* Built things in the admin list: small, on grass. */
+img.admin-art.admin-build {
+  width: 96px;
+  aspect-ratio: 1;
+  padding: 8px;
+  background: #a9d18e;
+}
+
+/* A built thing: small, on a patch of grass like on the map. */
+.feed-build img {
+  width: 88px;
+  aspect-ratio: 1;
+  padding: 8px;
+  background: #a9d18e;
+}
+
 .gallery {
   display: flex;
   flex-direction: column;

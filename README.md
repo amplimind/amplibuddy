@@ -20,6 +20,7 @@ It's a door-opener: people get used to AI by watching an agent behave instead of
 - **Thoughts**: every decision comes with a thought in plain words, plus which model made it, how long it took and what it cost. Chats with neighbours, web searches with their sources, paintings and letters show up here too.
 - **Mail**: write to your character (with a doodle if you like). It reads its post box in its own time and answers.
 - **Art**: paintings it made in the studio, as SVG code it wrote itself.
+- **Its own touches on the town**: on a dozen plots around town it builds what it likes (a bench by the pond, a lantern, a sculpture), designed by itself as SVG; hover over one to read its plaque. It hangs its paintings on the easels on the plaza, at home, in the café and on its studio wall.
 - **Code**: websites it built at the Code Lab, with their commits and links to open them.
 - **Memory**: its notebook (the only long-term memory, rewritten every night) and its diary.
 - **🧠 Mind** (top right): how your character develops. The topics on its mind and how they rise and fade, its notebook night by night (what it added, reworded and forgot), what it learned from books, the web and letters, what its neighbours remember about it, and how it spent each day.
@@ -322,6 +323,7 @@ The wizard writes `data/settings.json`, which wins over `.env`; real environment
 | `LLM_DAILY_BUDGET_USD` | `2` | Cloud only: hard cap per UTC day, then offline |
 | `LLM_MAX_CALLS_PER_HOUR` | `120` | Cloud only: guards against runaway loops |
 | `ART_PER_DAY` / `CHATS_PER_DAY` | `10` / `12` | Cloud only: paintings and neighbour chats per UTC day |
+| `BUILDS_PER_DAY` / `HANGS_PER_DAY` | `2` / `3` | Things built in town and paintings hung per UTC day (also with a local model) |
 | `NOTES_PER_DAY` | unlimited | Optional cap on notice-board notes per sim day |
 | `LETTER_LIMITS` | cloud `on`, local `off` | Letters per visitor (3/hour, 10/day) and per IP (20/day). The post box still holds at most 50 unread letters |
 | `SIM_HOST` | `127.0.0.1` | Only this computer can open the town. `0.0.0.0` shares it on your network (then set `SITE_PASSWORD`; settings need `ADMIN_TOKEN` from other machines) |
@@ -333,6 +335,7 @@ The wizard writes `data/settings.json`, which wins over `.env`; real environment
 | `CODE` | `on` | `off` closes the Code Lab |
 | `CODE_PER_DAY` | `2` | Cloud only: coding sessions per UTC day |
 | `SITES_PORT` | `4380` | Where the websites are served (sandboxed, this computer only) |
+| `CODE_BROWSER` | Chrome, if installed | The browser (headless, throwaway profile) that tries each page before and after a commit; a path, or `off` |
 | `GIT_URL` / `GIT_USER` / `GIT_TOKEN` | – | The local Forgejo/Gitea the Code Lab commits to; `npm run git:start` sets these in `data/settings.json` |
 | `GYROS_URL` | – | A GyrOS on this machine, e.g. `http://localhost:8100`. Empty = workshop closed |
 | `GYROS_UI_URL` | – | GyrOS web UI for the workshop links, e.g. `http://localhost:3200` |

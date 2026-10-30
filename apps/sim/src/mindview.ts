@@ -31,6 +31,8 @@ const TYPES = [
   'code_committed',
   'note_posted',
   'mail_read',
+  'built',
+  'painting_hung',
 ] as const;
 
 const emptyMinutes = (): Record<TimeCategory, number> =>
@@ -51,6 +53,8 @@ function ownText(e: WorldEvent): string | null {
       return e.data.message ?? null;
     case 'note_posted':
       return e.data.text ?? null;
+    case 'built':
+      return e.data.name ? `${e.data.name}. ${e.data.description}` : null;
     default:
       return null;
   }
@@ -72,6 +76,10 @@ function highlight(e: WorldEvent): { icon: string; text: string } | null {
       return e.data.from ? { icon: '✉️', text: `Letter from ${e.data.from}` } : { icon: '✉️', text: 'A private letter' };
     case 'activity_started':
       return e.data.with ? { icon: '💬', text: `Chatted with ${e.data.with}` } : null;
+    case 'built':
+      return e.data.name ? { icon: '🔨', text: `Built “${e.data.name}” ${e.data.where}` } : null;
+    case 'painting_hung':
+      return { icon: '🖼️', text: `Hung “${e.data.title}” ${e.data.where}` };
     default:
       return null;
   }
@@ -114,7 +122,7 @@ export function buildMindView(sim: Sim): MindView {
   const wordDays = new Map<string, number[]>();
 
   let started: { kind: ActivityKind; simTime: number } | null = null;
-  const stats = { booksRead: 0, searches: 0, paintings: 0, websites: sim.projects?.slugs().length ?? 0, letters: 0, chats: 0, notes: 0 };
+  const stats = { booksRead: 0, searches: 0, paintings: 0, websites: sim.projects?.slugs().length ?? 0, builds: 0, letters: 0, chats: 0, notes: 0 };
   const items: KnowledgeItem[] = [];
 
   for (const e of events) {
@@ -130,6 +138,7 @@ export function buildMindView(sim: Sim): MindView {
     if (e.type === 'reading') stats.booksRead++;
     if (e.type === 'browsed') stats.searches++;
     if (e.type === 'artwork_created') stats.paintings++;
+    if (e.type === 'built' && e.data.name) stats.builds++;
     if (e.type === 'mail_read') stats.letters++;
     if (e.type === 'note_posted' && e.data.text) stats.notes++;
 

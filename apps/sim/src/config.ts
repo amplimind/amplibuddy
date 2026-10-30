@@ -25,6 +25,8 @@ export const config = {
   letterLimits: process.env.LETTER_LIMITS
     ? process.env.LETTER_LIMITS !== 'off'
     : !(process.env.LLM_BASE_URL && !process.env.LLM_BASE_URL.includes('openrouter.ai')),
+  /** Building things in town. `BUILD=off` (or the switch in the settings) stops it and hides what was built. */
+  build: process.env.BUILD !== 'off',
   /** The Code Lab: the character's websites, served sandboxed on their own port. `CODE=off` closes it. */
   code: process.env.CODE !== 'off',
   sitesPort: Number(process.env.SITES_PORT ?? 4380),

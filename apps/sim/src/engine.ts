@@ -3,9 +3,11 @@ import {
   IDLE_RATES,
   PLACES,
   clampNeed,
+  frameById,
   minutesUntilMorning,
   moodFrom,
   pathBetween,
+  plotById,
   pointAlong,
   walkMinutes,
   type AgentState,
@@ -114,6 +116,10 @@ export class Engine {
     if (!def) return { ok: false, error: `unknown activity ${plan.kind}` };
     if (plan.kind === 'read' && !plan.bookId) return { ok: false, error: 'read needs a bookId' };
     if (plan.kind === 'browse' && !plan.query) return { ok: false, error: 'browse needs a query' };
+    if (plan.kind === 'build' && !plotById(plan.plot)) return { ok: false, error: 'build needs a plot' };
+    if (plan.kind === 'hang_painting' && (!frameById(plan.frame) || typeof plan.artId !== 'number')) {
+      return { ok: false, error: 'hang_painting needs a frame and a painting' };
+    }
     const to = this.placeOf(plan);
     if (!to) return { ok: false, error: `nobody to ${plan.kind} with` };
 
@@ -136,9 +142,11 @@ export class Engine {
     return { ok: true };
   }
 
-  /** Where a plan happens: the activity's place, or for a chat the partner's place. */
+  /** Where a plan happens: the activity's place, the partner's place for a chat, the plot's or frame's place. */
   private placeOf(plan: Plan): PlaceId | undefined {
     if (plan.kind === 'chat') return this.partner(plan.partnerId)?.place;
+    if (plan.kind === 'build') return plotById(plan.plot)?.place;
+    if (plan.kind === 'hang_painting') return frameById(plan.frame)?.place;
     return ACTIVITIES[plan.kind].place;
   }
 
@@ -153,6 +161,7 @@ export class Engine {
     };
     const bookTitle = plan.bookId ? this.bookTitle(plan.bookId) : undefined;
     const partner = plan.kind === 'chat' ? this.partner(plan.partnerId)?.name : undefined;
+    const where = plotById(plan.plot)?.where ?? frameById(plan.frame)?.where;
     this.emit(
       {
         type: 'activity_started',
@@ -162,6 +171,7 @@ export class Engine {
           ...(bookTitle ? { bookTitle } : {}),
           ...(plan.query ? { query: plan.query } : {}),
           ...(partner ? { with: partner } : {}),
+          ...(where ? { where } : {}),
         },
       },
       this.simTime,

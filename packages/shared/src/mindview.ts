@@ -9,7 +9,7 @@ export type TimeCategory = 'learning' | 'creating' | 'people' | 'outdoors' | 'fo
 /** Awake time by what it was for. Order = colour order on the page. Sleep is left out. */
 export const TIME_CATEGORIES: { id: TimeCategory; label: string; kinds: ActivityKind[] }[] = [
   { id: 'learning', label: 'Learning', kinds: ['read', 'browse', 'visit_workshop'] },
-  { id: 'creating', label: 'Creating', kinds: ['paint', 'code'] },
+  { id: 'creating', label: 'Creating', kinds: ['paint', 'code', 'build', 'hang_painting'] },
   { id: 'people', label: 'People', kinds: ['chat', 'check_mail', 'post_note'] },
   { id: 'outdoors', label: 'Out and about', kinds: ['stroll', 'think', 'people_watch'] },
   { id: 'food', label: 'Food and coffee', kinds: ['eat', 'coffee'] },
@@ -47,7 +47,7 @@ export interface Interest {
 
 export interface MindView {
   today: number;
-  stats: { booksRead: number; searches: number; paintings: number; websites: number; letters: number; chats: number; notes: number };
+  stats: { booksRead: number; searches: number; paintings: number; websites: number; builds: number; letters: number; chats: number; notes: number };
   interests: Interest[];
   interestDays: number[];
   /** Every night's notebook, oldest first. */

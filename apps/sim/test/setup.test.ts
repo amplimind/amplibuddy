@@ -66,6 +66,18 @@ test('setup: the key is stored for you only and never shown again', () => {
   const local = settingsEnv({ llm: { mode: 'local', model: 'ampli-gemma4:12b', visionModel: '' } });
   assert.equal(local.LLM_BASE_URL, 'http://localhost:11434/v1');
   assert.equal(local.BRAIN_MODEL, 'ampli-gemma4:12b');
+
+  // The switch for building: only written when it changes, and it wins over .env.
+  const before = process.env.BUILD;
+  delete process.env.BUILD;
+  assert.equal(setupState().building, true);
+  applySetup({ building: false }, store);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).building, false);
+  assert.equal(settingsEnv({ building: false }).BUILD, 'off');
+  assert.equal(settingsEnv({ building: true }).BUILD, 'on');
+  assert.equal(settingsEnv({}).BUILD, undefined);
+  if (before === undefined) delete process.env.BUILD;
+  else process.env.BUILD = before;
 });
 
 test('setup: only this Mac (or the admin) may change things, and only with JSON from this site', async () => {

@@ -122,6 +122,18 @@ export class Projects {
     readonly git: GitServer | null = null,
   ) {}
 
+  /**
+   * Tries the files in a real browser and returns what broke (see BrowserCheck). Only when
+   * the static check found nothing: a script that doesn't compile can't run either.
+   */
+  browserCheck: ((files: ProjectFile[]) => Promise<string[]>) | null = null;
+
+  private async problemsOf(files: Map<string, string>): Promise<string[]> {
+    const list = [...files].map(([path, content]) => ({ path, content }));
+    const problems = checkProject(list);
+    return problems.length === 0 && this.browserCheck ? this.browserCheck(list) : problems;
+  }
+
   private metaFile(slug: string): string {
     return join(this.dir, `${slug}.json`);
   }
@@ -220,7 +232,7 @@ export class Projects {
    * What the check would say if this session were committed, without saving anything: so
    * the character can still fix things (write a missing file) in the same session.
    */
-  preview(req: Pick<CodeCommitRequest, 'project' | 'files' | 'deleted'>): string[] {
+  async preview(req: Pick<CodeCommitRequest, 'project' | 'files' | 'deleted'>): Promise<string[]> {
     const merged = new Map(this.slugs().includes(req.project) ? this.files(req.project).map((f) => [f.path, f.content]) : []);
     const refused: string[] = [];
     for (const f of Array.isArray(req.files) ? req.files : []) {
@@ -232,7 +244,7 @@ export class Projects {
       const path = cleanProjectPath(d);
       if (path) merged.delete(path);
     }
-    return [...refused, ...checkProject([...merged].map(([path, content]) => ({ path, content })))];
+    return [...refused, ...(await this.problemsOf(merged))];
   }
 
   /**
@@ -299,7 +311,7 @@ export class Projects {
       }
     }
     meta.commits = [{ message, simTime, ...(sha ? { sha } : {}) }, ...meta.commits].slice(0, MAX_KEPT_COMMITS);
-    meta.problems = checkProject([...after].map(([path, content]) => ({ path, content })));
+    meta.problems = await this.problemsOf(after);
     mkdirSync(this.dir, { recursive: true });
     writeFileSync(this.metaFile(slug!), `${JSON.stringify(meta, null, 2)}\n`);
     return { project: this.project(slug!)!, message, written: written.map((w) => w.path), deleted, sha, problems: meta.problems };
