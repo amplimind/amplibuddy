@@ -1,0 +1,119 @@
+apps/web/src/Setup.tsx
+  s_2cca0dc321ad0c::t_e4fdbcc1b82d63 12,660,666-707
+  s_2cca0dc321ad0c::t_26fe651be58a90 708-711
+packages/shared/src/types.ts
+  s_2cca0dc321ad0c::t_904449663bfb34 185-198,201-203,277-279
+  s_2cca0dc321ad0c::t_3351711179845a 199-200
+  s_2cca0dc321ad0c::t_9ea85fbd814a53 8,24-25
+  s_2cca0dc321ad0c::t_537603d6f5ad73 184
+apps/brain/src/sim-client.ts
+  s_2cca0dc321ad0c::t_05e02dcb8d0ea2 4-5,68-74
+  s_2cca0dc321ad0c::t_2c865c1742b460 75
+package.json
+  s_2cca0dc321ad0c::t_323d15ca00fcf7 20-22
+apps/sim/src/setup.ts
+  s_2cca0dc321ad0c::t_e4fdbcc1b82d63 21,380-392
+  s_2cca0dc321ad0c::t_43e2b2acdb388d 393
+apps/brain/src/mind.ts
+  s_2cca0dc321ad0c::t_17217b073cff13 65-70,228,274-279,533-584
+  s_2cca0dc321ad0c::t_05e02dcb8d0ea2 351,353,376
+  s_2cca0dc321ad0c::t_9b915f5f94d3c5 585-586
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_4305267fc6acae 4,13,54,127
+packages/shared/test/code.test.ts
+  s_2cca0dc321ad0c::t_82eb33605b4954 1-15
+apps/web/src/town.ts
+  s_2cca0dc321ad0c::t_87ee94887c07dd 70,117,499-522,678
+packages/shared/src/world.ts
+  s_2cca0dc321ad0c::t_9ea85fbd814a53 77-84,229-237
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_3351711179845a 527-530
+  s_2cca0dc321ad0c::t_d2bf8d6d37dd02 21,39,239-242,415-422,493-526,531-532
+  s_2cca0dc321ad0c::t_aef3a7b8745678 533
+packages/shared/src/node.ts
+  s_2cca0dc321ad0c::t_904449663bfb34 34-35,73-77
+world/library/town-guide.md
+  s_2cca0dc321ad0c::t_6591fcc6cd389d 1-53
+packages/shared/src/index.ts
+  s_2cca0dc321ad0c::t_9ea85fbd814a53 10
+.gitignore
+  s_2cca0dc321ad0c::t_f9696027f1b138 3-5
+world/library/little-web-workshop.md
+  s_2cca0dc321ad0c::t_3d3b1d99f5d69b 1-170,175-296,301-320,325-370
+  s_2cca0dc321ad0c::t_9edb022dde63a8 171-174,297-300,321-324
+packages/shared/src/setup.ts
+  s_2cca0dc321ad0c::t_e4fdbcc1b82d63 107-115
+  s_2cca0dc321ad0c::t_87ee94887c07dd 11
+apps/sim/src/main.ts
+  s_2cca0dc321ad0c::t_19b2467ceb1114 2
+  s_2cca0dc321ad0c::t_586f4648300855 8-9,35-48,89
+apps/web/src/useWorld.ts
+  s_2cca0dc321ad0c::t_4305267fc6acae 76-80
+  s_2cca0dc321ad0c::t_25f2c12572fbf3 42,100
+packages/shared/src/code.ts
+  s_2cca0dc321ad0c::t_9ea85fbd814a53 1-84
+apps/sim/test/code.test.ts
+  s_2cca0dc321ad0c::t_82eb33605b4954 1-116,118-146
+  s_2cca0dc321ad0c::t_d34577a99e45f5 117
+apps/sim/src/config.ts
+  s_2cca0dc321ad0c::t_586f4648300855 24-31
+README.md
+  s_2cca0dc321ad0c::t_ac2942adcc7751 12,23,95-96,161-174,298-299,330-333,369
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_05e02dcb8d0ea2 94-96
+apps/web/src/Code.tsx
+  s_2cca0dc321ad0c::t_25f2c12572fbf3 1-64
+world/library/town-chronicle.md
+  s_2cca0dc321ad0c::t_64734177074c01 2,4,6,8,12,14,16,18-20
+apps/web/src/Panel.tsx
+  s_2cca0dc321ad0c::t_4305267fc6acae 255-277,433-440
+apps/sim/src/sites.ts
+  s_2cca0dc321ad0c::t_432a9fea685ab7 62-68,70-77
+  s_2cca0dc321ad0c::t_327ae861c0cc4e 1-61,69,78-83
+apps/brain/src/routine.ts
+  s_2cca0dc321ad0c::t_05e02dcb8d0ea2 42,66,80
+apps/web/src/styles.css
+  s_2cca0dc321ad0c::t_4305267fc6acae 1756-1812
+apps/sim/src/projects.ts
+  s_2cca0dc321ad0c::t_d34577a99e45f5 31-33,132
+  s_2cca0dc321ad0c::t_f8a0bb848c2b5c 1-30,34-131,133-265
+apps/sim/src/sim.ts
+  s_2cca0dc321ad0c::t_586f4648300855 5,36-37
+apps/brain/src/prompts.ts
+  s_2cca0dc321ad0c::t_d7df84ff5fbaf0 54-69,75,77-78
+  s_2cca0dc321ad0c::t_05e02dcb8d0ea2 147-150,179,421-424,730,741-743
+  s_2cca0dc321ad0c::t_c66e8f2a14a2ee 4-8,744,1056-1174
+  s_2cca0dc321ad0c::t_97d708d3446aeb 1175
+apps/brain/test/brain.test.ts
+  s_2cca0dc321ad0c::t_fec63c9c09f66d 735-750
+  s_2cca0dc321ad0c::t_290d5e105c8be6 35,451-452
+  s_2cca0dc321ad0c::t_94c777c9c3a329 78-79
+  s_2cca0dc321ad0c::t_e66d5b8d7ed27f 751
+.env.example
+  s_2cca0dc321ad0c::t_ac2942adcc7751 78-84
+scripts/git.ts
+  s_2cca0dc321ad0c::t_73535ba204c773 24,57-58,75
+  s_2cca0dc321ad0c::t_323d15ca00fcf7 105
+  s_2cca0dc321ad0c::t_3c60afed325f79 1-23,25-56,59-74,76-104,106-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2e4945058ba956647726c0fc0c52dc4ff13eb79f",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
