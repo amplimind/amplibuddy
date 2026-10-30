@@ -113,6 +113,8 @@ test('code: sites are served in a sandbox, and only files that belong to them', 
   assert.match(SITE_CSP, /connect-src 'none'/);
   assert.match(SITE_CSP, /form-action 'none'/);
   assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(page.headers.get('cross-origin-resource-policy'), null, 'it would block the page\'s own files in the sandbox');
+  assert.equal((await sites.request('/favicon.ico')).status, 204);
   assert.equal((await sites.request('/pond-clock/js/app.js')).headers.get('content-type'), 'text/javascript; charset=utf-8');
   assert.equal((await sites.request('/pond-clock')).status, 301);
   for (const path of ['/pond-clock/../pond-clock.json', '/pond-clock/%2e%2e/pond-clock.json', '/pond-clock.json/', '/nope/index.html', '/pond-clock/missing.html', '/..%2F..%2Fetc/passwd.txt', '/%2e%2e/x.html']) {

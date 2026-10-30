@@ -29,12 +29,13 @@ export const SITE_CSP = [
   "base-uri 'none'",
 ].join('; ');
 
+// No Cross-Origin-Resource-Policy: the sandbox gives each page an opaque origin, so to the
+// browser even its own style.css is "cross-origin", and CORP: same-origin would block it.
 const SECURITY_HEADERS = {
   'content-security-policy': SITE_CSP,
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
   'cross-origin-opener-policy': 'same-origin',
-  'cross-origin-resource-policy': 'same-origin',
   'cache-control': 'no-cache',
 };
 
@@ -58,6 +59,9 @@ export function createSitesApp(projects: Projects, ownerName: () => string): Hon
       { ...SECURITY_HEADERS, 'content-type': TYPES.html! },
     );
   });
+
+  // Browsers ask for one on their own; an empty answer keeps the console clean.
+  app.get('/favicon.ico', (c) => c.body(null, 204));
 
   app.get('*', (c) => {
     const notFound = () => c.body('Not found', 404, { ...SECURITY_HEADERS, 'content-type': TYPES.txt! });

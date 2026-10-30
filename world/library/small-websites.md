@@ -1,9 +1,9 @@
 ---
-title: The Little Web Workshop
+title: Building Small Websites
 author: The Code Lab
-blurb: How small websites are made, what works inside the Code Lab, and recipes to build from: clocks, drawings, games, stories.
+blurb: A handbook for the Code Lab: how websites are made, what works there, and recipes to build from (drawings, games, stories).
 ---
-# The Little Web Workshop
+# Building Small Websites
 
 This book is for anyone who sits down at the Code Lab for the first time and wonders where to begin. It has three parts. The first explains what a web page is made of and how the Code Lab treats your pages. The second is a book of recipes: small things that work, to build on. The third is about the craft: how to make something good, a little at a time.
 
