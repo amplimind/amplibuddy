@@ -95,3 +95,25 @@ test('setup: GyrOS can only be one on this machine', () => {
   const settings = JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')) as { gyros: unknown };
   assert.deepEqual(settings.gyros, { url: 'http://localhost:8100', uiUrl: '' });
 });
+
+test('setup: renaming the town or the character reaches what is remembered now, and is told', () => {
+  const store = new Store(':memory:');
+  const persona = { name: 'Ampli', species: 'small fox', look: 'fox' as const, town: 'Ampliville', personality: 'You are curious.' };
+  applySetup({ persona }, store);
+  store.saveNotebook(10, ["Ampliville's bed is soft.", 'Ampli likes the pond.', 'Nothing to rename here.']);
+  store.setNeighborNotes('hedda', ['Ampli takes his coffee strong.', 'Ampliville is quiet at night.']);
+
+  const events: unknown[] = [];
+  applySetup({ persona: { ...persona, name: 'Lumi', town: 'Mindhaven' } }, store, (e) => events.push(e));
+
+  assert.deepEqual(store.notebook(), ["Mindhaven's bed is soft.", 'Lumi likes the pond.', 'Nothing to rename here.']);
+  assert.deepEqual(store.neighborNotes('hedda'), ['Lumi takes his coffee strong.', 'Mindhaven is quiet at night.'], '"Ampli" inside "Ampliville" is left alone');
+  assert.deepEqual(events, [
+    { type: 'renamed', data: { what: 'town', from: 'Ampliville', to: 'Mindhaven' } },
+    { type: 'renamed', data: { what: 'character', from: 'Ampli', to: 'Lumi' } },
+  ]);
+
+  const quiet: unknown[] = [];
+  applySetup({ persona: { ...persona, name: 'Lumi', town: 'Mindhaven', personality: 'Changed.' } }, store, (e) => quiet.push(e));
+  assert.deepEqual(quiet, [], 'no rename, no event');
+});

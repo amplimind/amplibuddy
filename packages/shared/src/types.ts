@@ -181,6 +181,8 @@ export type EventBody =
   | { type: 'workshop_note'; data: { text: string; llm?: LlmMeta } }
   /** Ampli rang the workshop bell for runs that have waited too long for a human. */
   | { type: 'gyros_nudge'; data: { text: string; runs: GyrosNudgeRun[]; llm?: LlmMeta } }
+  /** The town or the character got a new name in the settings. */
+  | { type: 'renamed'; data: { what: 'town' | 'character'; from: string; to: string } }
   /**
    * A coding session at the Code Lab. `files`/`deleted`: what changed. `sha`: the commit on the
    * Git server (absent when there is none or it was unreachable). `held`: the content check said

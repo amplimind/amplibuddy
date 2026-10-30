@@ -74,6 +74,7 @@ A Terminal window opens. The first start downloads Node.js (only if your Mac doe
 - **Stop**: close the Terminal window (or press Ctrl+C in it). The town pauses; nothing is lost.
 - **Start again**: double-click `AmpliBuddy.command`. Later starts take seconds.
 - **Change anything**: **⚙️** at the top right: character, personality, brain, neighbours, the library, how fast time goes, GyrOS. Saving restarts the town for a few seconds; memories and the diary stay. To run the whole wizard again, open http://localhost:4300/?setup.
+- **Renaming** your character or the town in ⚙️: it's told about the new name, and what it and its neighbours remember right now (the notebook, the neighbours' notes) uses the new name. The diary keeps the old one; that's history.
 - **Speed**: *calm* (a day takes 4 hours, the default), *lively* (24 minutes) or *real time*. Faster means more thoughts per hour, which in the cloud costs more.
 - **Update**: download the new ZIP, unpack it, and move the `data` folder from your old folder into the new one. That folder is your whole town: settings, characters, memories, diary, letters, paintings.
 - **Start over**: stop the town and delete the `data` folder. The wizard greets you on the next start.

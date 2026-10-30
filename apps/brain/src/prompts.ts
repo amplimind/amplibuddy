@@ -150,6 +150,10 @@ export function describeEvent(e: WorldEvent): string | null {
       return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}${
         e.data.warnings?.length ? ` The Code Lab's check found problems to fix next time: ${e.data.warnings.join('; ')}.` : ''
       }`;
+    case 'renamed':
+      return e.data.what === 'town'
+        ? `${at} The town has a new name: ${e.data.to} (it used to be ${e.data.from}).`
+        : `${at} Your name is ${e.data.to} now (it used to be ${e.data.from}).`;
     case 'gyros_nudge':
       return `${at} You rang the workshop bell for the people who watch you: "${e.data.text}"`;
     case 'note_posted':

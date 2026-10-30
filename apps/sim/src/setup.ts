@@ -26,6 +26,7 @@ import {
   parseHours,
   recommendLocalModel,
   type OllamaStatus,
+  type EventBody,
   type PersonaDraft,
   type PersonalityTemplate,
   type PlaceId,
@@ -246,8 +247,23 @@ function saveResidents(residents: ResidentDraft[], store: Store): void {
   for (const id of before) if (!ids.has(id)) store.setNeighborNotes(id, []);
 }
 
-export function applySetup(body: SetupApply, store: Store): void {
-  if (body.persona) writeText(join(USER_WORLD_DIR, 'persona.md'), personaFileText(body.persona));
+export function applySetup(body: SetupApply, store: Store, log: (event: EventBody) => void = () => {}): void {
+  if (body.persona) {
+    const before = readPersona();
+    const text = personaFileText(body.persona);
+    writeText(join(USER_WORLD_DIR, 'persona.md'), text);
+    const after = parseFrontmatter(text).meta;
+    // A new name reaches what's remembered right now, and the character is told, so it
+    // isn't left wondering why the town it remembers has another name.
+    for (const [what, from, to] of [
+      ['town', before.town, after.town],
+      ['character', before.name, after.name],
+    ] as const) {
+      if (!from || !to || from === to || from.length < 2) continue;
+      store.renameInMemory(from, to);
+      log({ type: 'renamed', data: { what, from, to } });
+    }
+  }
   if (body.residents) saveResidents(body.residents, store);
 
   const settings = readSettings();
@@ -303,7 +319,10 @@ async function createAlias(model: string): Promise<string> {
   return alias;
 }
 
-export function registerSetup(app: Hono, opts: { adminToken?: string; store: Store; books?: Map<string, ShelfBook> }): void {
+export function registerSetup(
+  app: Hono,
+  opts: { adminToken?: string; store: Store; books?: Map<string, ShelfBook>; log?: (event: EventBody) => void },
+): void {
   const books = opts.books ?? new Map<string, ShelfBook>();
   /** Public: whether to show the wizard, and whether this viewer may change things. */
   app.get('/api/setup/status', (c) => c.json({ complete: setupComplete(), canConfigure: canConfigure(c, opts.adminToken) }));
@@ -328,7 +347,7 @@ export function registerSetup(app: Hono, opts: { adminToken?: string; store: Sto
     const body = (await c.req.json().catch(() => null)) as SetupApply | null;
     if (!body || typeof body !== 'object') return c.json({ error: 'bad request' }, 400);
     if (body.residents && !Array.isArray(body.residents)) return c.json({ error: 'residents must be a list' }, 400);
-    applySetup(body, opts.store);
+    applySetup(body, opts.store, opts.log);
     return c.json({ ok: true, restarting: true });
   });
 

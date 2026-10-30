@@ -296,6 +296,13 @@ function FeedItem({ event }: { event: WorldEvent }) {
           {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
         </li>
       );
+    case 'renamed':
+      return (
+        <li className="feed-item feed-minor">
+          {time} 🏷️ {event.data.what === 'town' ? 'The town is' : `${event.data.from} is`} called {event.data.to} now
+          {event.data.what === 'town' ? ` (it used to be ${event.data.from})` : ''}
+        </li>
+      );
     case 'gyros_nudge':
       return (
         <li className="feed-item feed-bell">

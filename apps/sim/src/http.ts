@@ -225,7 +225,7 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
 
   app.get('/api/state', (c) => c.json(sim.snapshot()));
 
-  registerSetup(app, { adminToken: opts.adminToken, store: sim.store, books: sim.books });
+  registerSetup(app, { adminToken: opts.adminToken, store: sim.store, books: sim.books, log: (event) => sim.log(event) });
 
   app.get('/api/events', (c) => {
     const limit = Math.min(200, Number(c.req.query('limit') ?? 80) || 80);

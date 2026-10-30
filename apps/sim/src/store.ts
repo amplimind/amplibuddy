@@ -242,6 +242,30 @@ export class Store {
     return this.diary(1)[0] ?? null;
   }
 
+  /**
+   * After a rename: the old name becomes the new one in what the character and its
+   * neighbours remember right now (the latest notebook, the neighbours' notes). The diary
+   * and past events stay as they were: that's history.
+   */
+  renameInMemory(from: string, to: string): number {
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu');
+    let changed = 0;
+    const swap = (notes: string[]) =>
+      notes.map((n) => {
+        const next = n.replace(pattern, to);
+        if (next !== n) changed++;
+        return next;
+      });
+    const latest = this.db.prepare('SELECT id, notes FROM notebook ORDER BY id DESC LIMIT 1').get() as Row | undefined;
+    if (latest) {
+      this.db.prepare('UPDATE notebook SET notes = ? WHERE id = ?').run(JSON.stringify(swap(JSON.parse(String(latest.notes)) as string[])), Number(latest.id));
+    }
+    for (const row of this.db.prepare("SELECT key, value FROM kv WHERE key LIKE 'neighbor_notes:%'").all() as Row[]) {
+      this.db.prepare('UPDATE kv SET value = ? WHERE key = ?').run(JSON.stringify(swap(JSON.parse(String(row.value)) as string[])), String(row.key));
+    }
+    return changed;
+  }
+
   saveNotebook(simTime: number, notes: string[]): void {
     this.db.prepare('INSERT INTO notebook (sim_time, notes) VALUES (?, ?)').run(simTime, JSON.stringify(notes));
   }
