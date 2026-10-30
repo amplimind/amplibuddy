@@ -1,0 +1,31 @@
+apps/sim/src/sites.ts
+  s_2cca0dc321ad0c::t_bef05ec83a2fa2 32-33,63-64
+  s_2cca0dc321ad0c::t_c9522c5314a895 65
+world/library/town-guide.md
+  s_2cca0dc321ad0c::t_dc039011d7e8db 34
+apps/sim/test/code.test.ts
+  s_2cca0dc321ad0c::t_bef05ec83a2fa2 116-117
+world/library/small-websites.md
+  s_2cca0dc321ad0c::t_dc039011d7e8db 1-370
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e8c4e7b24a02caf5990869171ce804b8a4e0381",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
