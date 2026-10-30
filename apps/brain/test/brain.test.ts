@@ -32,7 +32,7 @@ import {
   toReply,
   toVerdict,
 } from '../src/mind.ts';
-import { ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, buildPersonaPrompt, decideTool, decideUser, diarySystem, moderationSystem, noteUser, rutWords, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
+import { TOWN_GUIDE, ampliChatUser, bellFallback, bellUser, buildNeighborPrompt, codePlanTool, codeSystem, codeUser, buildPersonaPrompt, decideTool, decideUser, diarySystem, moderationSystem, noteUser, rutWords, gyrosEventLine, workshopLine, workshopUser, wonderingBlock, describeEvent, neighborChatUser, replyUser } from '../src/prompts.ts';
 import { availableActivities, offlineDecision, routineDecision, utility } from '../src/routine.ts';
 import { htmlToText, isPublicWebUrl, parseOllamaResults, parseWikipediaResults, repeatedSearch, resultsBlock, similarQuery } from '../src/search.ts';
 
@@ -75,6 +75,8 @@ function ctx(simTime: number, needs: Partial<Needs> = {}): BrainContext {
     browsesToday: 0,
     recentSearches: [],
     recentOwnTexts: [],
+    projects: [],
+    codeToday: 0,
     artToday: 0,
     chatsToday: 0,
     notesToday: 0,
@@ -446,7 +448,8 @@ test('persona prompt: generic personality text plus the world configuration from
   const prompt = buildPersonaPrompt('---\nname: Ampli\nspecies: small fox\ntown: Ampliville\n---\n## Identity\nYou are a small being.');
   assert.match(prompt, /^## Identity\nYou are a small being\./);
   assert.match(prompt, /## Your world configuration\n- Name: Ampli\n- Species: small fox\n- You live in Ampliville/);
-  assert.equal(buildPersonaPrompt('just text'), 'just text');
+  assert.match(prompt, /## Your town\n- Home: .*\n[\s\S]*- Code Lab: you build small websites/, 'every call knows the surroundings');
+  assert.equal(buildPersonaPrompt('just text'), `just text\n\n${TOWN_GUIDE}`);
 });
 
 // --- Ampli asks --------------------------------------------------------------------------------
@@ -728,4 +731,21 @@ test('ruts: a topic that took over gets a rest, everywhere the character speaks 
   c.recentOwnTexts = c.recentOwnTexts.slice(0, 9);
   assert.equal(rutWords(c), null, 'too little said to call it a rut');
   assert.match(diarySystem('p'), /A question you found the answer to is not open anymore/);
+});
+
+test('Code Lab: offered with the websites so far; the session sees the files and the sandbox rules', () => {
+  const c = ctx(NOON);
+  c.projects = [{ slug: 'pond-clock', name: 'Pond Clock', description: 'A clock.', files: ['index.html'], lastCommit: 'Start' }];
+  assert.ok(!availableActivities(NOON).includes('code'));
+  const prompt = decideUser(c, availableActivities(NOON, { canCode: true }));
+  assert.match(prompt, /- code @ Code Lab \(60 min\): .* Your websites so far: "Pond Clock"\./);
+  assert.deepEqual((codePlanTool(['pond-clock']).parameters.properties as Record<string, { enum?: string[] }>).project?.enum, ['pond-clock', 'new']);
+  assert.match(codeSystem('p'), /nothing loads from the internet/);
+  assert.match(codeSystem('p'), /can't make network requests/);
+  const user = codeUser({ name: 'Pond Clock', description: 'A clock.', idea: 'Add seasons', isNew: false }, [{ path: 'index.html', content: '<h1>Hi</h1>' }]);
+  assert.match(user, /<file path="index.html">\n<h1>Hi<\/h1>\n<\/file>/);
+  assert.match(
+    describeEvent({ id: 1, simTime: NOON, realTime: '', type: 'code_committed', data: { project: 'x', name: 'X', error: 'not allowed as a file: a.sh' } }) ?? '',
+    /the Code Lab refused it: not allowed as a file/,
+  );
 });

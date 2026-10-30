@@ -1,6 +1,8 @@
 import type {
   ArtworkRequest,
   BookPart,
+  CodeCommitRequest,
+  ProjectFile,
   BrainLetter,
   BrainContext,
   BrowseRequest,
@@ -61,6 +63,14 @@ export class SimClient {
 
   diary(body: DiaryRequest): Promise<unknown> {
     return this.request('POST', '/api/brain/diary', body);
+  }
+
+  projectFiles(slug: string): Promise<ProjectFile[]> {
+    return this.request('GET', `/api/brain/projects/${encodeURIComponent(slug)}/files`);
+  }
+
+  code(body: CodeCommitRequest): Promise<unknown> {
+    return this.request('POST', '/api/brain/code', body);
   }
 
   workshopNote(body: WorkshopNoteRequest): Promise<unknown> {

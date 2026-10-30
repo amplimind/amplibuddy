@@ -62,6 +62,12 @@ import {
   sayTool,
   takeawayTool,
   bellFallback,
+  codePlanSystem,
+  codePlanTool,
+  codePlanUser,
+  codeSystem,
+  codeTool,
+  codeUser,
   bellSystem,
   bellTool,
   bellUser,
@@ -219,6 +225,7 @@ export class Mind {
   private chatFor: number | null = null;
   private noteFor: number | null = null;
   private workshopFor: number | null = null;
+  private codeFor: number | null = null;
   /** Who the character is, for the content checks ("Ampli, an AI small fox character"). */
   private character = 'Ampli, an AI fox character';
   /** Real time of the last bell attempt, so a failed one doesn't send Ampli back right away. */
@@ -262,6 +269,12 @@ export class Mind {
       this.browseFor = activity.startedAt;
       const done = ctx.recentEvents.some((e) => e.type === 'browsed' && e.simTime >= activity.startedAt);
       if (!done) void this.browse(ctx, activity.query);
+    }
+
+    if (activity.kind === 'code' && this.codeFor !== activity.startedAt) {
+      this.codeFor = activity.startedAt;
+      const done = ctx.recentEvents.some((e) => e.type === 'code_committed' && e.simTime >= activity.startedAt);
+      if (!done) void this.code(ctx);
     }
 
     if (activity.kind === 'visit_workshop' && this.workshopFor !== activity.startedAt) {
@@ -335,7 +348,9 @@ export class Mind {
     const canChat = ctx.chatsToday < this.cfg.chatsPerDay && present.length > 0;
     const canPostNote = ctx.notesToday < this.cfg.notesPerDay;
     const canVisitWorkshop = ctx.snapshot.gyros?.connected === true;
+    const canCode = this.cfg.code && ctx.codeToday < this.cfg.codePerDay;
     const kinds = availableActivities(ctx.snapshot.simTime, {
+      canCode,
       mailWaiting: this.answering ? 0 : ctx.mail.waiting,
       canBrowse,
       canPaint,
@@ -358,6 +373,7 @@ export class Mind {
     }
     if (this.cfg.webSearch && !canBrowse) unavailable.push('browse: no more web searches today');
     if (!canPaint) unavailable.push("paint: you've painted enough for today");
+    if (this.cfg.code && !canCode) unavailable.push("code: you've coded enough for today");
     try {
       const ask = async (notes: string[]) => {
         const { args, meta } = await this.llm({
@@ -511,6 +527,60 @@ export class Mind {
       console.log(`[brain] chat with ${neighbor.name}: ${transcript.length} lines ($${(spent + meta.costUsd).toFixed(4)})`);
     } catch (err) {
       console.warn('[brain] chat failed:', (err as Error).message);
+    }
+  }
+
+  /**
+   * At the Code Lab: plan (which website, what idea), then write the files, check what the
+   * page shows, and hand it to the sim, which validates, saves, commits and serves it.
+   */
+  private async code(ctx: BrainContext): Promise<void> {
+    if (!this.llmAvailable(ctx)) return;
+    try {
+      const plan = await this.llm({
+        model: this.cfg.brainModel,
+        system: codePlanSystem(this.persona),
+        user: codePlanUser(ctx),
+        tool: codePlanTool(ctx.projects.map((p) => p.slug)),
+        maxTokens: 300,
+        temperature: 0.9,
+      });
+      const chosen = ctx.projects.find((p) => p.slug === plan.args.project);
+      const name = chosen?.name ?? (typeof plan.args.name === 'string' && plan.args.name.trim() ? plan.args.name.trim().slice(0, 40) : 'My first website');
+      const idea = typeof plan.args.idea === 'string' ? plan.args.idea.trim() : '';
+      if (!idea) throw new Error('no idea for the session');
+      const current = chosen ? await this.sim.projectFiles(chosen.slug) : [];
+
+      const { args, meta } = await this.llm({
+        model: this.cfg.brainModel,
+        system: codeSystem(this.persona),
+        user: codeUser({ name, description: chosen?.description ?? '', idea, isNew: !chosen }, current),
+        tool: codeTool,
+        maxTokens: 12_000,
+        temperature: 0.7,
+      });
+      const files = (Array.isArray(args.files) ? args.files : [])
+        .filter((f): f is { path: string; content: string } => typeof f?.path === 'string' && typeof f?.content === 'string')
+        .map((f) => ({ path: f.path, content: f.content }));
+      const deleted = (Array.isArray(args.deleted) ? args.deleted : []).filter((d): d is string => typeof d === 'string');
+      const message = typeof args.message === 'string' ? args.message.trim() : '';
+      if (files.length === 0 && deleted.length === 0) throw new Error('the session produced no files');
+
+      // What the page shows is public: check it like a painting.
+      const check = await this.moderate('code', files.map((f) => `--- ${f.path}\n${f.content}`).join('\n\n').slice(0, 8000));
+      await this.sim.code({
+        project: chosen?.slug ?? name,
+        ...(chosen ? {} : { description: typeof args.description === 'string' ? args.description : idea }),
+        files,
+        deleted,
+        message: message || idea,
+        ...(check.verdict === 'hold' ? { held: true } : {}),
+        llm: [meta, plan.meta, check.meta],
+      });
+      const status = check.verdict === 'hold' ? `held (${check.reason})` : `${files.length} files`;
+      console.log(`[brain] coded "${name}": ${message || idea} (${status}, ${cost(meta)})`);
+    } catch (err) {
+      console.warn('[brain] coding failed:', (err as Error).message);
     }
   }
 

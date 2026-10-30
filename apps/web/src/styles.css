@@ -1753,3 +1753,60 @@ textarea.book-text {
   line-height: 1.5;
   resize: vertical;
 }
+
+/* --- Code Lab --- */
+
+.projects {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #cfe5d8;
+  background: #f1f8f4;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.project header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.commits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+code.sha {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #e2ece6;
+  color: #3f5a4c;
+  font-size: 11px;
+}
+
+.feed-code {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f1f8f4;
+  border: 1px solid #cfe5d8;
+}
+
+.feed-code p {
+  margin-bottom: 4px;
+}

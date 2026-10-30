@@ -67,6 +67,7 @@ const BUILDINGS: Partial<Record<PlaceDef['id'], BuildingStyle>> = {
   netcafe: { roof: '#3b4a6b', roofDark: '#2c3852', wall: '#e6eef5', awning: ['#7a5cc7', '#e6eef5'] },
   studio: { roof: '#d9822b', roofDark: '#b5661a', wall: '#fbf3e4', awning: ['#e0b84c', '#c8553d'] },
   workshop: { roof: '#55606e', roofDark: '#424b57', wall: '#ece6da', awning: ['#f2a33a', '#3b3127'] },
+  lab: { roof: '#2f6f62', roofDark: '#24574d', wall: '#e9efe9', awning: ['#3ddc97', '#1b1f2a'] },
 };
 
 /** The workshop has a glass roof: GyrOS stays visible from outside. */
@@ -113,6 +114,7 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   chat: '💬',
   post_note: '📌',
   visit_workshop: '⚙️',
+  code: '⌨️',
 };
 
 function px(tile: number): number {
@@ -494,6 +496,30 @@ const INTERIORS: Partial<Record<PlaceId, (ctx: CanvasRenderingContext2D, room: R
     rect(ctx, '#6e2e2e', 5.75, 17.8, 1.5, 1.35, 6);
     rect(ctx, '#8c3b3b', 5.95, 17.95, 1.1, 1.05, 5);
   },
+  lab(ctx, room) {
+    checker(ctx, room, '#3d4454', '#373d4c');
+    // The desk with two screens full of code, the chair in front.
+    rect(ctx, '#8a6a4a', 42.9, 3.75, 4.6, 0.55, 3);
+    for (const sx of [44, 46.3]) {
+      rect(ctx, '#1b1f2a', sx - 0.62, 3.1, 1.24, 0.72, 2);
+      ['#7fd3ff', '#b5f28a', '#f2c26b', '#7fd3ff'].forEach((color, i) => {
+        rect(ctx, color, sx - 0.5 + (i % 2) * 0.12, 3.2 + i * 0.13, 0.55 - (i % 3) * 0.12, 0.06, 1);
+      });
+    }
+    chair(ctx, 45, 4.75, '#2c3852');
+    // The Git server: a rack with little lights.
+    rect(ctx, '#20242e', 48.4, 3.3, 0.9, 2.1, 2);
+    for (let i = 0; i < 4; i++) circle(ctx, i % 2 ? '#7dff9b' : '#ffd77a', 48.62, 3.6 + i * 0.45, 0.06);
+    // A neon "</>" on the wall.
+    ctx.font = `700 ${px(0.55)}px ui-monospace, Menlo, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#3ddc97';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#b8ffd9';
+    ctx.fillText('</>', px(42.2), px(5.6));
+    ctx.shadowBlur = 0;
+  },
   netcafe(ctx, room) {
     checker(ctx, room, '#646d84', '#5b6378');
     // Router with a blinking light, a neon "@", the desk row with three screens.
@@ -649,6 +675,7 @@ const RESIDENT_SPOTS: Record<PlaceId, Point> = {
   library: { x: 8.2, y: 17.6 },
   plaza: { x: 17.4, y: 14.6 },
   netcafe: { x: 16.2, y: 20.4 },
+  lab: { x: 47.2, y: 6.2 },
   studio: { x: 16.4, y: 4.4 },
   workshop: { x: 47, y: 18.6 },
 };

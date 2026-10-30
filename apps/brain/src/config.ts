@@ -91,6 +91,9 @@ export const config = {
       : costLimit('WEB_SEARCHES_PER_DAY', 20),
   artPerDay: costLimit('ART_PER_DAY', 10),
   chatsPerDay: costLimit('CHATS_PER_DAY', 12),
+  /** The Code Lab. A session writes a whole website, so in the cloud it's capped tighter. */
+  code: process.env.CODE !== 'off',
+  codePerDay: costLimit('CODE_PER_DAY', 2),
   // No limit by default: notes are Ampli's way to reach people. Set NOTES_PER_DAY to cap them.
   notesPerDay: process.env.NOTES_PER_DAY ? Number(process.env.NOTES_PER_DAY) : Infinity,
   webExcludeDomains: (process.env.WEB_EXCLUDE_DOMAINS ?? '')

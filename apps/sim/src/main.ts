@@ -1,10 +1,12 @@
 import { serve } from '@hono/node-server';
-import { VISITOR_RETENTION_DAYS, formatClock } from '@ampli-world/shared';
+import { VISITOR_RETENTION_DAYS, formatClock, isLocalUrl } from '@ampli-world/shared';
 import { config, loadNeighbors, loadPersona } from './config.ts';
 import { GyrosBridge } from './gyros.ts';
 import { createApp } from './http.ts';
 import { libraryDir } from '@ampli-world/shared/node';
 import { loadLibrary } from './library.ts';
+import { GitServer, Projects } from './projects.ts';
+import { createSitesApp } from './sites.ts';
 import { Sim } from './sim.ts';
 import { Store } from './store.ts';
 
@@ -29,6 +31,20 @@ const timer = setInterval(() => {
   last = now;
   if (++ticks % SAVE_EVERY_TICKS === 0) sim.save();
 }, TICK_MS);
+
+let sitesServer: ReturnType<typeof serve> | null = null;
+if (config.code) {
+  const git =
+    config.gitUrl && config.gitUser && config.gitToken && isLocalUrl(config.gitUrl)
+      ? new GitServer(config.gitUrl, config.gitUser, config.gitToken, { name: persona.name, email: `${config.gitUser}@ampli.local` })
+      : null;
+  sim.projects = new Projects(config.projectsDir, `http://localhost:${config.sitesPort}`, git);
+  // Its own port and origin: the sites never share cookies or storage with the town's page.
+  sitesServer = serve(
+    { fetch: createSitesApp(sim.projects, () => persona.name).fetch, port: config.sitesPort, hostname: '127.0.0.1' },
+    ({ port }) => console.log(`[sim] Code Lab sites at http://localhost:${port}${git ? ` · Git at ${git.url}` : ' · no Git server'}`),
+  );
+}
 
 if (config.gyrosUrl) {
   sim.gyros = new GyrosBridge(config.gyrosUrl, config.gyrosUiUrl || null, (body) => sim.log(body), {
@@ -70,6 +86,7 @@ function shutdown() {
   sim.save();
   store.close();
   server.close();
+  sitesServer?.close();
   process.exit(0);
 }
 process.on('SIGINT', shutdown);

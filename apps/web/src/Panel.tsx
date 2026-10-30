@@ -252,6 +252,29 @@ function FeedItem({ event }: { event: WorldEvent }) {
       );
     case 'gyros':
       return null;
+    case 'code_committed':
+      if (event.data.held || event.data.error) {
+        return (
+          <li className="feed-item feed-minor">
+            {time} wrote code for “{event.data.name}”, but{' '}
+            {event.data.held ? "it didn't pass the content check" : `the Code Lab refused it (${event.data.error})`}
+          </li>
+        );
+      }
+      return (
+        <li className="feed-item feed-code">
+          {time}
+          <p>
+            <span className="feed-kicker">⌨️ Committed to “{event.data.name}”</span>
+            {event.data.message}
+          </p>
+          <p className="hint">
+            {(event.data.files ?? []).join(', ')}
+            {event.data.sha && <code className="sha">{event.data.sha.slice(0, 7)}</code>}
+          </p>
+          {event.data.llm && <SourceBadge source="llm" llm={event.data.llm} />}
+        </li>
+      );
     case 'gyros_nudge':
       return (
         <li className="feed-item feed-bell">
@@ -407,7 +430,14 @@ export function HowItWorks({ name, usage, neighbors }: { name: string; usage: Us
         {neighbors.length > 0 ? 'Neighbours help' : 'Nobody else lives in town'}, but if you want {name} to feel less
         lonely, write.
       </p>
-      <h3>10. The GyrOS workshop</h3>
+      <h3>10. The Code Lab</h3>
+      <p>
+        At the Code Lab, {name} builds small websites of its own. The model first decides what to build or improve, then
+        writes the files (HTML, CSS, JavaScript) and a commit message. The town checks every path and size, saves the
+        files, commits them to a local Git server if one runs, and serves the site at once. The sites run in a sandbox:
+        no network, no forms, no access to the town or anything else. See them in the Code tab.
+      </p>
+      <h3>11. The GyrOS workshop</h3>
       <p>
         If GyrOS runs on the same machine, the glass-roofed workshop shows its pipeline: every ticket in flight is a
         little robot at the station it's working on, from the ticket desk through draft, workbench, gates and review to

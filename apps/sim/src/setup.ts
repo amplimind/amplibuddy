@@ -18,6 +18,7 @@ import {
   isLook,
   localAlias,
   GYROS_DEFAULTS,
+  type GitProbe,
   type GyrosProbe,
   type LibraryBookDraft,
   lookOf,
@@ -375,6 +376,20 @@ export function registerSetup(app: Hono, opts: { adminToken?: string; store: Sto
   });
 
   app.get('/api/setup/ollama', async (c) => c.json(await ollamaStatus()));
+
+  /** Is the Code Lab's Git server running, and is the town connected to it? */
+  app.get('/api/setup/git', async (c) => {
+    const url = (process.env.GIT_URL || 'http://localhost:3300').replace(/\/+$/, '');
+    const probe: GitProbe = { running: false, url, version: null, connected: !!(process.env.GIT_URL && process.env.GIT_TOKEN) };
+    if (!isLocalUrl(url)) return c.json(probe);
+    try {
+      const res = await fetch(`${url}/api/v1/version`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) Object.assign(probe, { running: true, version: ((await res.json()) as { version?: string }).version ?? null });
+    } catch {
+      // Not running.
+    }
+    return c.json(probe);
+  });
 
   /** Is GyrOS running on this machine? Only local addresses are tried, and only its run list is read. */
   app.get('/api/setup/gyros', async (c) => {

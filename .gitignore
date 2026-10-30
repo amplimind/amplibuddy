@@ -1,11 +1,8 @@
 node_modules
 dist
-data/*.db
-data/*.db-*
-# Your settings and your own characters (made in the setup wizard)
-data/settings.json
-data/world/
-data/logs/
+# Everything about your own town: database, settings, characters, books, websites,
+# the Git server's data and its login. Never in git.
+data/
 .runtime/
 .env
 .DS_Store

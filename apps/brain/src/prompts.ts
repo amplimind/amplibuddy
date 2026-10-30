@@ -1,6 +1,11 @@
 import {
   ACTIVITIES,
   ART_VIEWBOX,
+  MAX_COMMIT_MESSAGE_CHARS,
+  MAX_FILE_CHARS,
+  MAX_PROJECT_CHARS,
+  MAX_PROJECT_FILES,
+  MAX_PROJECT_NAME_CHARS,
   MAX_ART_TITLE_CHARS,
   MAX_CAPTION_CHARS,
   MAX_MEMORY_CHARS,
@@ -46,14 +51,31 @@ const GROUND_RULES = `
  * The persona body plus the world configuration from its frontmatter (name, species,
  * town): the personality text stays generic, the world says who and where you are.
  */
+/**
+ * What every place is for and where things end up: always part of the persona, so the
+ * character knows its surroundings without having to read about them first.
+ */
+export const TOWN_GUIDE = `## Your town
+- Home: your bed, for the night and for naps.
+- Café Kiosk: food and coffee. A neighbour may be behind the counter.
+- Park: trees, a pond and a bench for thinking.
+- Library: books to read; long ones a part per visit. The people who watch you can add books, also as PDFs.
+- Plaza: the fountain, the post box (letters from the people who watch you, sometimes with a drawing) and the notice board (notes and questions you pin for them; they can answer).
+- Internet Café: real web searches. You read what you find and note it, with the sources.
+- Art Studio: you paint pictures (written as SVG). They hang in your gallery.
+- Code Lab: you build small websites (HTML, CSS, JavaScript). Each session is a commit in your own Git repository, and the site is online at once for the people who watch you.
+- Workshop: GyrOS, a system the people who watch you use at work to turn tickets into pull requests. When it runs, you can watch it and ring its bell when something waits for a human.
+The people who watch you see all of this on a web page: your town, what you're doing, your thoughts, your paintings, your websites, your diary and your notebook. They're colleagues at work, not visitors in town.`;
+
 export function buildPersonaPrompt(fileText: string): string {
   const { meta, body } = parseFrontmatter(fileText);
   const config = [
     meta.name && `- Name: ${meta.name}`,
     meta.species && `- Species: ${meta.species}`,
-    meta.town && `- You live in ${meta.town}, a tiny town (the places are listed in your observations).`,
+    meta.town && `- You live in ${meta.town}, a tiny town.`,
   ].filter(Boolean);
-  return config.length > 0 ? `${body}\n\n## Your world configuration\n${config.join('\n')}` : body;
+  const world = config.length > 0 ? `\n\n## Your world configuration\n${config.join('\n')}` : '';
+  return `${body}${world}\n\n${TOWN_GUIDE}`;
 }
 
 /**
@@ -122,6 +144,10 @@ export function describeEvent(e: WorldEvent): string | null {
       return `${at} ${gyrosEventLine(e.data)}`;
     case 'workshop_note':
       return `${at} At the workshop you explained: "${e.data.text}"`;
+    case 'code_committed':
+      if (e.data.held) return `${at} You wrote code for "${e.data.name}", but it didn't pass the content check, so nothing was saved.`;
+      if (e.data.error) return `${at} You tried to save your code for "${e.data.name}", but the Code Lab refused it: ${e.data.error}.`;
+      return `${at} At the Code Lab you worked on your website "${e.data.name}" and committed: ${e.data.message}`;
     case 'gyros_nudge':
       return `${at} You rang the workshop bell for the people who watch you: "${e.data.text}"`;
     case 'note_posted':
@@ -150,6 +176,7 @@ const OPTION_ORDER: ActivityKind[] = [
   'paint',
   'post_note',
   'visit_workshop',
+  'code',
   'check_mail',
   'chat',
   'stroll',
@@ -391,6 +418,10 @@ export function decideUser(ctx: BrainContext, kinds: ActivityKind[], unavailable
     .map((k) => {
       const a = ACTIVITIES[k];
       const minutes = k === 'sleep' ? 'until morning' : `${a.minutes} min`;
+      if (k === 'code') {
+        const sites = ctx.projects.map((p) => `"${p.name}"`).join(', ');
+        return `- code @ ${PLACES.lab.name} (${minutes}): ${a.description}${sites ? ` Your websites so far: ${sites}.` : " You haven't built one yet."}`;
+      }
       if (k === 'chat') {
         const here = presentNeighbors(ctx)
           .map((n) => `${n.name} the ${n.species} @ ${PLACES[n.place].name}`)
@@ -696,7 +727,7 @@ export const moderationTool: ToolSpec = {
   },
 };
 
-export type ModerationTarget = 'letter' | 'reply' | 'search' | 'note' | 'art' | 'board';
+export type ModerationTarget = 'letter' | 'reply' | 'search' | 'note' | 'art' | 'board' | 'code';
 
 const MODERATION_TARGETS: Record<ModerationTarget, { what: string; extra: string }> = {
   letter: {
@@ -706,6 +737,10 @@ const MODERATION_TARGETS: Record<ModerationTarget, { what: string; extra: string
   board: {
     what: 'a note {character} wants to pin on a public notice board for employees',
     extra: '\n- statements or promises on behalf of the company',
+  },
+  code: {
+    what: 'a small website (HTML, CSS and JavaScript) that {character} wrote. Judge what the page shows and says, not the code style. It will be shown publicly',
+    extra: '\n- code meant to trick or harm visitors (fake login forms, phishing, hidden tracking)',
   },
   art: {
     what: 'an artwork (SVG code, title and caption) that {character} made. It will be shown publicly in a gallery',
@@ -1016,6 +1051,126 @@ export function bellUser(ctx: BrainContext, runs: GyrosRun[]): string {
 
 Waiting for a human for too long:
 ${lines.join('\n')}`;
+}
+
+// --- The Code Lab ---------------------------------------------------------------------
+
+/** Step 1: which website, and what to do with it this session. */
+export function codePlanTool(slugs: string[]): ToolSpec {
+  return {
+    name: 'plan',
+    description: 'Decide what to build or change in this coding session.',
+    parameters: {
+      type: 'object',
+      properties: {
+        project: {
+          type: 'string',
+          enum: [...slugs, 'new'],
+          description: 'One of your websites, or "new" to start one.',
+        },
+        name: { type: 'string', description: `Only for "new": a short name for the website (max ${MAX_PROJECT_NAME_CHARS} characters).` },
+        idea: { type: 'string', description: 'What you will build or change this session, in one concrete sentence.' },
+      },
+      required: ['project', 'idea'],
+    },
+  };
+}
+
+const CODE_RULES = `How the Code Lab works:
+- A website is plain HTML, CSS and JavaScript in a few files; index.html is the start page. No build tools, frameworks or libraries.
+- Everything lives in the project: nothing loads from the internet (no CDNs, web fonts, external images or APIs). The page runs in a sandbox: it can't make network requests, send forms or use localStorage. Drawing on a canvas, SVG, animations, buttons and games all work.
+- Small and finished beats big and broken: one idea per session that works when you're done.
+- Allowed files: .html .css .js .json .svg .txt .md, at most ${MAX_PROJECT_FILES} per project, each under ${MAX_FILE_CHARS} characters, the whole project under ${MAX_PROJECT_CHARS}.`;
+
+export function codePlanSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the Code Lab. Decide what to build in this session: improve one of your websites, or start a new one. Build what you actually want to make, from what's on your mind; something the people who watch you can open and enjoy.
+
+${CODE_RULES}
+
+Answer by calling the \`plan\` tool once.`;
+}
+
+export function codePlanUser(ctx: BrainContext): string {
+  const { simTime, agent } = ctx.snapshot;
+  const projects =
+    ctx.projects.length > 0
+      ? ctx.projects
+          .map((p) => `- ${p.slug}: "${p.name}". ${p.description} Files: ${p.files.join(', ') || '(none)'}. Last change: ${p.lastCommit ?? '(none)'}`)
+          .join('\n')
+      : '(none yet)';
+  return `It is day ${dayOf(simTime)}, ${formatTime(simTime)}. Mood: ${agent.mood.label}.
+
+Your notebook:
+${notebookBlock(ctx.notebook)}
+${rutBlock(ctx)}
+What happened recently (oldest first):
+${recentLines(ctx, 10).join('\n') || '(not much yet)'}
+
+Your websites:
+${projects}`;
+}
+
+/** Step 2: the files. */
+export const codeTool: ToolSpec = {
+  name: 'commit',
+  description: 'Write the files for this session and commit them.',
+  parameters: {
+    type: 'object',
+    properties: {
+      files: {
+        type: 'array',
+        description: 'Every file you create or change, each with its complete new content (not a diff).',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'e.g. "index.html", "style.css", "js/game.js"' },
+            content: { type: 'string' },
+          },
+          required: ['path', 'content'],
+        },
+      },
+      deleted: { type: 'array', items: { type: 'string' }, description: 'Paths of files to remove, if any.' },
+      message: {
+        type: 'string',
+        description: `The commit message: one short line saying what changed (max ${MAX_COMMIT_MESSAGE_CHARS} characters), e.g. "Add a clock that shows the pond's season".`,
+      },
+      description: { type: 'string', description: 'Only for a new website: what it is, in one sentence.' },
+    },
+    required: ['files', 'message'],
+  },
+};
+
+export function codeSystem(persona: string): string {
+  return `${persona}
+
+${GROUND_RULES}
+
+## Your job right now
+You're at the Code Lab writing code for your website. Do what you planned, carefully: code that works the first time it's opened. Write in your own style, with short comments where they help.
+
+${CODE_RULES}
+
+Answer by calling the \`commit\` tool once.`;
+}
+
+export function codeUser(
+  plan: { name: string; description: string; idea: string; isNew: boolean },
+  files: { path: string; content: string }[],
+): string {
+  const current =
+    files.length > 0
+      ? files.map((f) => `<file path="${f.path}">\n${f.content}\n</file>`).join('\n\n')
+      : '(no files yet)';
+  return `${plan.isNew ? 'A new website' : 'Your website'}: "${plan.name}"${plan.description ? `. ${plan.description}` : ''}
+What you're doing this session: ${plan.idea}
+
+The files as they are now:
+${current}`;
 }
 
 export const workshopTool: ToolSpec = {

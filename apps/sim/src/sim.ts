@@ -2,6 +2,7 @@ import type { BookWithText, EventBody, Neighbor, Persona, WorldEvent, WorldSnaps
 import { Engine, initialState } from './engine.ts';
 import type { GyrosBridge } from './gyros.ts';
 import type { ShelfBook } from './library.ts';
+import type { Projects } from './projects.ts';
 import type { Store } from './store.ts';
 
 export interface SseMessage {
@@ -32,6 +33,8 @@ export class Sim {
   readonly engine: Engine;
   /** Set by main when GYROS_URL is configured. */
   gyros: GyrosBridge | null = null;
+  /** Set by main unless CODE=off. */
+  projects: Projects | null = null;
 
   constructor(
     readonly store: Store,

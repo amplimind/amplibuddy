@@ -9,6 +9,7 @@ import {
   PLACES,
   RESIDENT_PLACES,
   localAlias,
+  type GitProbe,
   type GyrosProbe,
   type Look,
   type OllamaStatus,
@@ -656,7 +657,54 @@ function ExtrasForm({
           {!SPEEDS.some((s) => Math.abs(s.value - speed) < 1e-6) && <option value={speed}>Custom: {speed} town minutes per second</option>}
         </select>
       </Field>
+      <GitStatus />
       <GyrosConnect gyros={gyros} onGyros={onGyros} />
+    </div>
+  );
+}
+
+/** The Code Lab's Git server: optional, set up from the terminal because it needs Docker. */
+function GitStatus() {
+  const [probe, setProbe] = useState<GitProbe | null>(null);
+  const check = () =>
+    fetch('/api/setup/git')
+      .then((r) => r.json() as Promise<GitProbe>)
+      .then(setProbe)
+      .catch(() => setProbe(null));
+  useEffect(() => {
+    void check();
+  }, []);
+  return (
+    <div className="gyros-connect">
+      <span className="field-label">Code Lab Git server (optional)</span>
+      <p className="hint">
+        Websites built at the Code Lab are always saved and online in town. With a local Git server (Forgejo) every
+        change also becomes a real commit you can browse, with history and diffs.
+      </p>
+      {!probe && <p className="hint">Looking for it…</p>}
+      {probe && (
+        <div className={`model-card ${probe.running && probe.connected ? 'ready' : ''}`}>
+          <div>
+            <strong>
+              {probe.running ? (probe.connected ? `Connected to Forgejo ${probe.version ?? ''}` : 'Forgejo runs, but the town isn\'t connected') : 'No Git server running'}
+            </strong>
+            <p className="hint">
+              {probe.running && probe.connected ? (
+                <a href={probe.url} target="_blank" rel="noopener noreferrer">
+                  {probe.url} ↗
+                </a>
+              ) : (
+                <>
+                  Needs Docker Desktop. In the Terminal, in the Ampli World folder: <code>npm run git:start</code>
+                </>
+              )}
+            </p>
+          </div>
+          <button type="button" className="secondary" onClick={() => void check()}>
+            Check again
+          </button>
+        </div>
+      )}
     </div>
   );
 }

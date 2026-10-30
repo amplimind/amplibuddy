@@ -74,6 +74,14 @@ export const PLACES: Record<PlaceId, PlaceDef> = {
     spot: { x: 44, y: 18 }, // in the middle of the stations
     description: 'Where GyrOS works: an AI system that turns Jira tickets into pull requests, step by step, with a human in the loop.',
   },
+  lab: {
+    id: 'lab',
+    name: 'Code Lab',
+    area: { x: 41, y: 3, w: 9, h: 6 },
+    door: { x: 45, y: 9 },
+    spot: { x: 45, y: 5 }, // at the keyboard
+    description: 'A desk, a big screen and a Git server: where you write code and build small websites of your own.',
+  },
   netcafe: {
     id: 'netcafe',
     name: 'Internet Café',
@@ -217,6 +225,15 @@ export const ACTIVITIES: Record<ActivityKind, ActivityDef> = {
       'Go to the workshop and watch GyrOS turn tickets into pull requests; explain to the people watching what is happening and whether it needs them.',
     minutes: 30,
     rates: { energy: -2, satiety: -4, fun: 16, social: 6 },
+  },
+  code: {
+    kind: 'code',
+    place: 'lab',
+    verb: 'coding at the Code Lab',
+    description:
+      'Write code: start a small website of your own or improve one (HTML, CSS, JavaScript). It goes into your Git repository and is online in town right away.',
+    minutes: 60,
+    rates: { energy: -6, satiety: -6, fun: 22, social: 2 },
   },
   check_mail: {
     kind: 'check_mail',

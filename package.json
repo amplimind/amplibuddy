@@ -17,7 +17,9 @@
     "test": "node --import tsx --test \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "search:start": "docker run -d --name ampli-searxng --restart unless-stopped -p 127.0.0.1:8888:8080 -v \"$PWD/tools/searxng:/etc/searxng\" -e SEARXNG_SECRET=$(openssl rand -hex 16) searxng/searxng:latest && echo \"SearXNG running at http://localhost:8888 (set SEARXNG_URL=http://localhost:8888 in .env)\"",
-    "search:stop": "docker rm -f ampli-searxng"
+    "search:stop": "docker rm -f ampli-searxng",
+    "git:start": "node --disable-warning=ExperimentalWarning --import tsx scripts/git.ts start",
+    "git:stop": "node --disable-warning=ExperimentalWarning --import tsx scripts/git.ts stop"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

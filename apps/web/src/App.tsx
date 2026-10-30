@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatClock } from '@ampli-world/shared';
 import { AskCard } from './AskCard.tsx';
+import { CodeTab } from './Code.tsx';
 import { Gallery } from './Gallery.tsx';
 import { Mailbox } from './Mailbox.tsx';
 import { CritterPreview, SettingsPanel, SetupWizard } from './Setup.tsx';
@@ -9,7 +10,7 @@ import { TownCanvas } from './TownCanvas.tsx';
 import { useWorld } from './useWorld.ts';
 import { BellCard, WorkshopPanel } from './Workshop.tsx';
 
-const TABS = ['Thoughts', 'Mail', 'Art', 'Memory'] as const;
+const TABS = ['Thoughts', 'Mail', 'Art', 'Code', 'Memory'] as const;
 type Tab = (typeof TABS)[number] | 'How it works';
 
 /** Whether the town still needs setting up, and whether this viewer may change settings. */
@@ -50,7 +51,7 @@ export function App() {
 }
 
 function Town({ canConfigure }: { canConfigure: boolean }) {
-  const { snapshot, events, diary, notebook, usage, connected, live, bubble, mailVersion, artVersion } = useWorld();
+  const { snapshot, events, diary, notebook, usage, connected, live, bubble, mailVersion, artVersion, codeVersion } = useWorld();
   const [tab, setTab] = useState<Tab>('Thoughts');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const name = snapshot?.persona.name ?? 'Ampli';
@@ -123,6 +124,7 @@ function Town({ canConfigure }: { canConfigure: boolean }) {
             {tab === 'Thoughts' && <Feed events={events} />}
             {tab === 'Mail' && <Mailbox snapshot={snapshot} mailVersion={mailVersion} />}
             {tab === 'Art' && <Gallery name={name} artVersion={artVersion} />}
+            {tab === 'Code' && <CodeTab name={name} codeVersion={codeVersion} />}
             {tab === 'Memory' && <MemoryView diary={diary} notebook={notebook} name={name} />}
             {tab === 'How it works' && <HowItWorks name={name} usage={usage} neighbors={snapshot?.neighbors ?? []} />}
           </section>

@@ -5,7 +5,7 @@ import type { Look } from './species.ts';
 // Everything the sim, the brain and the web client agree on.
 // Time is always "sim minutes" since the world began (day 1, 00:00).
 
-export type PlaceId = 'home' | 'cafe' | 'park' | 'library' | 'plaza' | 'netcafe' | 'studio' | 'workshop';
+export type PlaceId = 'home' | 'cafe' | 'park' | 'library' | 'plaza' | 'netcafe' | 'studio' | 'workshop' | 'lab';
 
 export type ActivityKind =
   | 'sleep'
@@ -21,7 +21,8 @@ export type ActivityKind =
   | 'paint'
   | 'chat'
   | 'post_note'
-  | 'visit_workshop';
+  | 'visit_workshop'
+  | 'code';
 
 export interface Point {
   x: number;
@@ -181,6 +182,26 @@ export type EventBody =
   /** Ampli rang the workshop bell for runs that have waited too long for a human. */
   | { type: 'gyros_nudge'; data: { text: string; runs: GyrosNudgeRun[]; llm?: LlmMeta } }
   /**
+   * A coding session at the Code Lab. `files`/`deleted`: what changed. `sha`: the commit on the
+   * Git server (absent when there is none or it was unreachable). `held`: the content check said
+   * no, nothing was saved.
+   */
+  | {
+      type: 'code_committed';
+      data: {
+        project: string;
+        name: string;
+        message?: string;
+        files?: string[];
+        deleted?: string[];
+        sha?: string;
+        held?: boolean;
+        /** Why it couldn't be saved (a path or size the Code Lab doesn't allow). */
+        error?: string;
+        llm?: LlmMeta;
+      };
+    }
+  /**
    * A note Ampli pinned on the notice board. Held notes carry no text, only `held`, and notes that
    * couldn't be written only `failed`, so Ampli knows what actually is on the board.
    */
@@ -253,6 +274,9 @@ export interface BrainContext {
   recentSearches: { query: string; takeaway?: string; simTime: number }[];
   /** What the character itself said lately (thoughts, notes, searches, paintings, chat lines), oldest first. */
   recentOwnTexts: string[];
+  /** Its websites at the Code Lab (no file contents), and coding sessions since 00:00 UTC. */
+  projects: { slug: string; name: string; description: string; files: string[]; lastCommit: string | null }[];
+  codeToday: number;
   /** Artworks since 00:00 UTC, for the daily cap. */
   artToday: number;
   /** Chats started since 00:00 UTC, for the daily cap. */

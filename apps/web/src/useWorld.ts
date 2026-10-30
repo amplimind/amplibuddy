@@ -39,6 +39,7 @@ export function useWorld() {
   const [mailVersion, setMailVersion] = useState(0);
   /** Bumped whenever a new artwork goes up, so the gallery refetches. */
   const [artVersion, setArtVersion] = useState(0);
+  const [codeVersion, setCodeVersion] = useState(0);
   const live = useRef<LiveSnapshot | null>(null);
   const bubble = useRef<Bubble | null>(null);
 
@@ -72,6 +73,11 @@ export function useWorld() {
         bubble.current = { text: event.data.text, receivedAt: performance.now(), speaker: event.data.speaker };
         if (event.data.llm) refreshUsage();
       }
+      if (event.type === 'code_committed') {
+        setCodeVersion((v) => v + 1);
+        if (event.data.message) bubble.current = { text: `Committed: ${event.data.message}`, receivedAt: performance.now() };
+        refreshUsage();
+      }
       if (event.type === 'artwork_created') {
         setArtVersion((v) => v + 1);
         bubble.current = { text: `I made something: “${event.data.title}”`, receivedAt: performance.now() };
@@ -91,5 +97,5 @@ export function useWorld() {
     return () => source.close();
   }, []);
 
-  return { snapshot, events, diary, notebook, usage, connected, live, bubble, mailVersion, artVersion };
+  return { snapshot, events, diary, notebook, usage, connected, live, bubble, mailVersion, artVersion, codeVersion };
 }

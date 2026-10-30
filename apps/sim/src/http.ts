@@ -18,6 +18,7 @@ import {
   readingProgress,
   splitIntoParts,
   type BookPart,
+  type CodeCommitRequest,
   repairSvg,
   MAX_MEMORY_CHARS,
   MAX_QUERY_CHARS,
@@ -35,6 +36,7 @@ import {
   type WebSource,
 } from '@ampli-world/shared';
 import { withoutText, type ShelfBook } from './library.ts';
+import { CommitError } from './projects.ts';
 import { registerSetup } from './setup.ts';
 import type { Sim, SseMessage } from './sim.ts';
 
@@ -234,6 +236,10 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
     return c.json([...books.values()].map((b) => ({ ...withoutText(b), timesRead: counts.get(b.id) ?? 0 })));
   });
 
+  // --- Code Lab (public) ---
+
+  app.get('/api/projects', (c) => c.json(sim.projects?.list() ?? []));
+
   /** Where reading a book continues, from what was read before. */
   const progressOf = (book: ShelfBook) => readingProgress(store.readingsOf(book.id), book.parts);
 
@@ -406,6 +412,14 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
       browsesToday: store.countEventsToday('browsed'),
       recentSearches: store.recentSearches(),
       recentOwnTexts: store.recentOwnTexts(),
+      projects: (sim.projects?.list() ?? []).map((p) => ({
+        slug: p.slug,
+        name: p.name,
+        description: p.description,
+        files: p.files.map((f) => f.path),
+        lastCommit: p.commits[0]?.message ?? null,
+      })),
+      codeToday: store.countActivityToday('code'),
       artToday: store.countArtToday(),
       chatsToday: store.countActivityToday('chat'),
       // Per sim day: this limit keeps the board from flooding, it isn't about cost.
@@ -474,6 +488,47 @@ export function createApp(sim: Sim, opts: AppOptions): Hono {
   app.get('/api/brain/events-since', (c) => {
     const since = Number(c.req.query('simTime')) || 0;
     return c.json(store.eventsSince(since));
+  });
+
+  /** A project's files, for a coding session. */
+  app.get('/api/brain/projects/:slug/files', (c) => {
+    if (!sim.projects) return c.json({ error: 'the Code Lab is closed' }, 404);
+    return c.json(sim.projects.files(c.req.param('slug')));
+  });
+
+  /** The end of a coding session: checked, saved, committed, and online at once. */
+  app.post('/api/brain/code', async (c) => {
+    if (!sim.projects) return c.json({ error: 'the Code Lab is closed' }, 404);
+    const body = (await c.req.json().catch(() => null)) as CodeCommitRequest | null;
+    if (!isRecord(body) || typeof body.project !== 'string') return c.json({ error: 'bad request' }, 400);
+    const metas = (Array.isArray(body.llm) ? body.llm : []).map(parseLlm).filter((m): m is LlmMeta => !!m);
+    for (const meta of metas) store.recordLlmCall('code', meta);
+    const llm = metas[0] ? { llm: metas[0] } : {};
+    if (body.held === true) {
+      sim.log({ type: 'code_committed', data: { project: body.project.slice(0, 60), name: body.project.slice(0, 60), held: true, ...llm } });
+      return c.json({ ok: true, saved: false });
+    }
+    try {
+      const done = await sim.projects.commit(body, engine.simTime);
+      sim.log({
+        type: 'code_committed',
+        data: {
+          project: done.project.slug,
+          name: done.project.name,
+          message: done.message,
+          files: done.written,
+          ...(done.deleted.length > 0 ? { deleted: done.deleted } : {}),
+          ...(done.sha ? { sha: done.sha } : {}),
+          ...llm,
+        },
+      });
+      return c.json({ ok: true, saved: true, project: done.project });
+    } catch (err) {
+      if (!(err instanceof CommitError)) throw err;
+      // Logged, so the character knows its code didn't land instead of believing it did.
+      sim.log({ type: 'code_committed', data: { project: body.project.slice(0, 60), name: body.project.slice(0, 60), error: err.message, ...llm } });
+      return c.json({ error: err.message }, 400);
+    }
   });
 
   /** The part of a book to read now (long books are read one part per visit). */

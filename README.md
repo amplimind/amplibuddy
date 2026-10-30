@@ -9,7 +9,7 @@ It's a door-opener: people get used to AI by watching an agent behave instead of
 - [What you're looking at](#what-youre-looking-at)
 - [Set it up on your Mac](#set-it-up-on-your-mac)
 - [Everyday use](#everyday-use) · [If something's off](#if-somethings-off)
-- [The animals](#the-animals) · [Personalities](#personalities) · [Neighbours](#neighbours) · [The library](#the-library)
+- [The animals](#the-animals) · [Personalities](#personalities) · [Neighbours](#neighbours) · [The library](#the-library) · [The Code Lab](#the-code-lab)
 - [GyrOS workshop (optional)](#gyros-workshop-optional)
 - [For developers](#for-developers)
 
@@ -20,6 +20,7 @@ It's a door-opener: people get used to AI by watching an agent behave instead of
 - **Thoughts**: every decision comes with a thought in plain words, plus which model made it, how long it took and what it cost. Chats with neighbours, web searches with their sources, paintings and letters show up here too.
 - **Mail**: write to your character (with a doodle if you like). It reads its post box in its own time and answers.
 - **Art**: paintings it made in the studio, as SVG code it wrote itself.
+- **Code**: websites it built at the Code Lab, with their commits and links to open them.
 - **Memory**: its notebook (the only long-term memory, rewritten every night) and its diary.
 - **How it works**: the whole mechanism explained, with today's costs.
 
@@ -91,6 +92,8 @@ Everything stays on your Mac: the town only listens on this computer (others on 
 | Thoughts are short and generic, the badge under them says "offline · no AI" | No brain is set up, or it can't be reached: ⚙️ → Brain. For local thinking, Ollama must be running. ("routine · no AI" is normal: bedtime and meals are simple rules.) |
 | Thoughts take ages | The local model is too big for your Mac: ⚙️ → Brain → `ampli-gemma4:12b`, or switch to the cloud. |
 | The workshop says "closed" | That's normal without GyrOS, see [below](#gyros-workshop-optional). |
+| `npm run git:start` says Docker is not running | Install and open [Docker Desktop](https://www.docker.com/products/docker-desktop/), then run it again. |
+| A website shows nothing | Open it again after the next commit; it's a first draft. The Code tab shows what changed. |
 
 ## The animals
 
@@ -154,6 +157,20 @@ Your character reads in the library, and what it reads ends up in its notes, its
 - **Edit or remove** any book, including the three the town comes with.
 
 Long texts are read **in parts**, one part (about ten pages) per visit to the library. Your character picks up where it stopped and sees its notes on the earlier parts, so even a whole book fits a small local model. The feed shows which part it read. Changes count at once, no restart needed. Your books are in `data/library/`.
+
+## The Code Lab
+
+In the building with the green roof your character writes code: small websites of its own, in HTML, CSS and JavaScript. Each session it decides what to build or improve, writes the files and a commit message, and the site is online at once at **http://localhost:4380**. The **Code** tab lists them all with their history.
+
+- **The websites run in a sandbox**: their JavaScript runs, but they can't load anything from the internet, send anything anywhere, use forms or storage, or touch the town. No code runs on your Mac itself; it only runs in your browser, boxed in.
+- Every session is checked before it's saved: allowed file types only (`.html .css .js .json .svg .txt .md`), paths stay inside the project, sizes are capped (12 files, 80 000 characters per site), and what the page shows goes through the same content check as paintings.
+- **A real Git server (optional)**: with Docker Desktop installed, run this once in the Terminal, in the Ampli World folder:
+
+  ```bash
+  npm run git:start
+  ```
+
+  It starts [Forgejo](https://forgejo.org) (a small, open-source GitHub/GitLab) on **http://localhost:3300**, only reachable from your Mac, creates your character's own account and connects the town. From then on every session is a real commit you can browse, with history and diffs. The account's login for you is in `data/git-login.txt`. `npm run git:stop` stops it; the repositories stay in `data/forgejo`. Without it, websites are still saved and online, just without Git history.
 
 ## GyrOS workshop (optional)
 
@@ -278,6 +295,8 @@ Three processes, on purpose (same split as Pino):
 
 **Animals** are drawn in code, not images: `critters.ts` builds all eight from one round body plus ears, tail and markings. A new animal is a new entry in `SPRITES` there and in `LOOKS` (`packages/shared/src/species.ts`).
 
+**The Code Lab**: `apps/sim/src/projects.ts` (validation, saving, the Forgejo API mirror), `apps/sim/src/sites.ts` (the sandboxed sites server and its CSP), `scripts/git.ts` (Forgejo in Docker). A session is two calls: `plan` (which website, what idea), then `commit` (complete files plus message).
+
 **The GyrOS workshop**: see [GyrOS workshop](#gyros-workshop-optional) above. Code: `apps/sim/src/gyros.ts` (read-only bridge and the bell), `packages/shared/src/gyros.ts` (stations and labels), `apps/web/src/Workshop.tsx`.
 
 ## Configuration
@@ -308,6 +327,10 @@ The wizard writes `data/settings.json`, which wins over `.env`; real environment
 | `BRAIN_TOKEN` | random per `npm start` | Shared secret for `/api/brain/*`; empty = unchecked (fine while the sim only listens locally) |
 | `ADMIN_TOKEN` | – | Enables `/admin` (held letters, reports, mailbox kill switch) and remote settings. Empty = admin off |
 | `SITE_PASSWORD` | – | One shared password for the whole site (browser login prompt) |
+| `CODE` | `on` | `off` closes the Code Lab |
+| `CODE_PER_DAY` | `2` | Cloud only: coding sessions per UTC day |
+| `SITES_PORT` | `4380` | Where the websites are served (sandboxed, this computer only) |
+| `GIT_URL` / `GIT_USER` / `GIT_TOKEN` | – | The local Forgejo/Gitea the Code Lab commits to; `npm run git:start` sets these in `data/settings.json` |
 | `GYROS_URL` | – | A GyrOS on this machine, e.g. `http://localhost:8100`. Empty = workshop closed |
 | `GYROS_UI_URL` | – | GyrOS web UI for the workshop links, e.g. `http://localhost:3200` |
 | `GYROS_NUDGE_AFTER_MIN` | `120` | Workshop bell for runs waiting longer than this (real minutes), once per wait. `0` = never |
@@ -343,3 +366,4 @@ npm start        # what the double-click runs: sim (serving apps/web/dist) + bra
 4. ~~GyrOS workshop (read-only pipeline view, workshop bell)~~; daily diary post to Slack/Teams
 5. ~~Building interiors (roofs fade when Ampli is inside or on hover)~~, a small economy, town events
 6. ~~One-click start, setup wizard, eight animals, neighbours with templates~~
+7. ~~Editable library with PDFs~~; ~~Code Lab: websites, sandboxed hosting, local Forgejo~~; next: running programs in an isolated container

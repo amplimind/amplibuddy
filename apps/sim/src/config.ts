@@ -21,6 +21,14 @@ export const config = {
   /** Ampli rings the workshop bell for runs waiting longer than this (real minutes). 0 = never. */
   gyrosNudgeAfterMin: Number(process.env.GYROS_NUDGE_AFTER_MIN ?? 120),
   sitePassword: process.env.SITE_PASSWORD ?? '',
+  /** The Code Lab: the character's websites, served sandboxed on their own port. `CODE=off` closes it. */
+  code: process.env.CODE !== 'off',
+  sitesPort: Number(process.env.SITES_PORT ?? 4380),
+  /** A local Forgejo/Gitea the Code Lab commits to (`npm run git:start` sets this up). */
+  gitUrl: (process.env.GIT_URL ?? '').replace(/\/+$/, ''),
+  gitUser: process.env.GIT_USER ?? '',
+  gitToken: process.env.GIT_TOKEN ?? '',
+  projectsDir: join(DATA_DIR, 'projects'),
   dbFile: process.env.SIM_DB_FILE ?? join(DATA_DIR, 'world.db'),
   webDist: `${ROOT}apps/web/dist`,
 };

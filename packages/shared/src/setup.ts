@@ -8,7 +8,7 @@ export const MAX_SETUP_SPECIES_CHARS = 40;
 export const MAX_PERSONALITY_CHARS = 6000;
 
 /** Where neighbours can live. Home is the main character's. */
-export const RESIDENT_PLACES: PlaceId[] = ['cafe', 'park', 'library', 'plaza', 'netcafe', 'studio', 'workshop'];
+export const RESIDENT_PLACES: PlaceId[] = ['cafe', 'park', 'library', 'plaza', 'netcafe', 'studio', 'workshop', 'lab'];
 
 export interface PersonaDraft {
   name: string;
@@ -102,6 +102,15 @@ export function isLocalUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The Code Lab's Git server, as the settings page sees it. */
+export interface GitProbe {
+  running: boolean;
+  url: string;
+  version: string | null;
+  /** The town has a token for it (set up by `npm run git:start`). */
+  connected: boolean;
 }
 
 export interface GyrosProbe {
