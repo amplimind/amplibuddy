@@ -1,0 +1,56 @@
+apps/sim/src/library.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 137
+apps/sim/src/http.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 219
+apps/web/src/App.tsx
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 41,67
+apps/brain/src/config.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 124
+apps/brain/src/search.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 16
+README.md
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 1,7,37,41,75,88,90,167,343
+package.json
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 2
+AmpliBuddy.command
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 1-45
+apps/web/index.html
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 7
+apps/web/src/Setup.tsx
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 698
+apps/sim/src/config.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 46
+scripts/start.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 1,3,73
+world/neighbors/hedda.md
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 9
+world/persona.md
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 4
+apps/sim/src/setup.ts
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 129,218
+apps/web/src/Admin.tsx
+  s_2cca0dc321ad0c::t_a5bd7ed32e046b 192,208
+package-lock.json
+  s_2cca0dc321ad0c::t_346063c5ea3293 2,8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "896eea35d4ed0eda37272eab81c21fb2b406f0e6",
+  "prompts": {},
+  "humans": {
+    "h_7975f9c020a9ed": {
+      "author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  },
+  "sessions": {
+    "s_2cca0dc321ad0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5103905a-d886-4688-ba79-12181d17ab88",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Dennis Müller <dennis.mueller@amplimind.io>"
+    }
+  }
+}
